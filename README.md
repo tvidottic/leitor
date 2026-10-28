@@ -12,7 +12,13 @@ importa fica a um toque; o resto está no menu “⋯”.
   mesmo arquivo, automaticamente, poucos segundos após cada alteração.
 - **Tradução por seleção e tradução contextual com IA:** o diferencial para estudo de idiomas (detalhes abaixo).
 
-## Como executar
+## Onde usar
+
+Versão publicada (instalável em celular e tablet): **https://tvidottic.github.io/leitor/**
+
+O site entrega apenas o código do aplicativo. Livros, anotações, vocabulário e chaves ficam no navegador de cada aparelho; nada é enviado ao GitHub. Para o Google Drive e o Dropbox, use esse endereço nas origens/redirects autorizados (Dropbox: com a barra final).
+
+## Como executar localmente
 
 Requisito: Python 3. Não há dependências nem etapa de build.
 
