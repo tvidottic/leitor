@@ -588,6 +588,7 @@ export class Reader {
     const sel = this.currentSelection();
     let ann = null;
     if (cur.annId) ann = this.ann.get(cur.annId);
+    if (!ann && cur.parts?.length) { const created = await this.ann.addFromParts(cur.parts, cur.text, { type: 'highlight', color: this.lastColor }); ann = created[0]; }
     if (!ann && sel && !sel.isCollapsed && this.selectionInViewer(sel)) { const created = await this.ann.addFromSelection(sel, { type: 'highlight', color: this.lastColor }); ann = created[0]; }
     if (!ann) ann = this.ann.items.find(a => a.page === cur.page && a.text === cur.text);
     if (!ann) { toast('Selecione o trecho novamente para anexar a explicação como anotação.'); return; }
@@ -819,8 +820,8 @@ export class Reader {
         alts.length ? el('div', { class: 'wp-alt', text: alts.join(' · ') }) : null,
         el('div', { class: 'wp-actions' },
           el('button', { class: 'btn ghost', title: 'Salvar no vocabulário', onclick: () => this.saveSelectionToVocab(this.lastQuick) }, icon('star'), 'Salvar'),
-          el('button', { class: 'btn ghost', title: 'Explicar no contexto (IA)', onclick: () => { this.hideWordPopup(); this.panel.show({ text, page, mode: 'ai' }); } }, icon('sparkle'), 'Contexto'),
-          el('button', { class: 'btn primary', onclick: () => { this.hideWordPopup(); this.panel.show({ text, page }); } }, 'Mais')));
+          el('button', { class: 'btn ghost', title: 'Explicar no contexto (IA)', onclick: () => this.openPanelFor({ text, page, mode: 'ai' }) }, icon('sparkle'), 'Contexto'),
+          el('button', { class: 'btn primary', onclick: () => this.openPanelFor({ text, page }) }, 'Mais')));
       this.positionWordPopup();
     } catch (err) {
       if (err?.name === 'AbortError') return;
@@ -877,8 +878,19 @@ export class Reader {
   translateSelection(mode) {
     const text = this.getSelectedText();
     if (!text) { this.panel.toggle(); return; }
+    this.openPanelFor({ text, page: this.selectionPage(), mode });
+  }
+
+  /** Abre o painel de tradução para um trecho. No toque, limpa a seleção (o painel cobre a página) guardando as partes. */
+  openPanelFor(req) {
     this.hideWordPopup();
-    this.panel.show({ text, page: this.selectionPage(), mode });
+    const sel = this.currentSelection();
+    if (sel && !sel.isCollapsed && this.selectionInViewer(sel) && normalizeText(sel.toString()) === req.text) {
+      req.parts = this.ann.selectionToPageRects(sel);
+    }
+    this.panel.show(req);
+    if (this.customSel.enabled && this.customSel.range) { this.customSel.clear(); }
+    else if (isCoarsePointer()) { try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ } this.clearSelectionUi(); }
   }
 
   onViewerClick(e) {

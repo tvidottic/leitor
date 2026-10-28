@@ -62,6 +62,7 @@ export class TranslationPanel {
     const aiBlock = el('div', { class: 'tr-block', id: 'tr-ai' });
     const wikiBlock = el('div', { class: 'tr-block', id: 'tr-wiki', hidden: true });
     const actions = el('div', { class: 'tr-actions' },
+      req.parts?.length ? el('button', { class: 'btn', title: 'Destacar este trecho na página', onclick: async (e) => { const btn = e.currentTarget; const cur = this.current; const created = await this.reader.ann.addFromParts(cur.parts, cur.text, { type: 'highlight', color: this.reader.lastColor }); if (created[0]) { cur.annId = created[0].id; cur.parts = null; btn.remove(); toast('Trecho destacado.'); } } }, icon('highlight'), 'Destacar') : null,
       el('button', { class: 'btn', onclick: () => this.reader.saveSelectionToVocab(this.current) }, icon('star'), single || wordCount(text) <= 4 ? 'Salvar no vocabulário' : 'Salvar expressão'),
       wordCount(text) <= 6 ? el('button', { class: 'btn', title: 'Consultar na Wikipédia (nomes, lugares, conceitos)', onclick: () => this.runWiki(wikiBlock, text, ctrl.signal) }, icon('wiki'), 'Wikipédia') : null,
       el('a', { class: 'btn', href: googleTranslateUrl(text, { sl, tl }), target: '_blank', rel: 'noopener', title: 'Abrir no Google Tradutor' }, icon('external'), 'Google Tradutor'),

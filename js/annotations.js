@@ -168,10 +168,15 @@ export class AnnotationManager extends EventTarget {
     return out;
   }
 
-  async addFromSelection(selection, { type = 'highlight', color = 'yellow', note = '' } = {}) {
+  async addFromSelection(selection, opts = {}) {
     const parts = this.selectionToPageRects(selection);
     if (!parts.length) return [];
-    const fullText = normalizeText(selection.toString());
+    return this.addFromParts(parts, normalizeText(selection.toString()), opts);
+  }
+
+  /** Cria anotações a partir de partes {page, rects, text} calculadas antes (a seleção pode já ter sido limpa). */
+  async addFromParts(parts, fullText, { type = 'highlight', color = 'yellow', note = '' } = {}) {
+    if (!parts?.length) return [];
     const groupId = parts.length > 1 ? uid() : null;
     const created = parts.map(part => ({
       id: uid(), v: 2, bookId: this.bookId, page: part.page, type, color, rects: part.rects, paths: [],
