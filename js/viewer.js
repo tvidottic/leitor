@@ -27,6 +27,7 @@ export class PdfViewer extends EventTarget {
     this.rotation = 0;          // rotação extra (0/90/180/270)
     this.cropMargins = false;   // corta as margens brancas
     this.pageMode = 'scroll';   // 'scroll' | 'paged'
+    this.viewLock = true;       // paginado: mantém zoom e enquadramento ao virar a página
     this.currentPage = 1;
     this.textCache = new Map();
     this.rendering = 0;
@@ -67,7 +68,7 @@ export class PdfViewer extends EventTarget {
     }
     this.viewerEl.replaceChildren(frag);
     this.zoomMode = zoomMode;
-    if (pageMode === 'paged') this.zoomMode = 'page-fit';
+    this.currentPage = clamp(Math.round(page) || 1, 1, this.numPages);
     this.computeScale();
     this.layout();
     this.goTo(page, yRatio);
@@ -157,7 +158,7 @@ export class PdfViewer extends EventTarget {
     const gutter = this.container.offsetWidth - this.container.clientWidth > 0 ? 0 : 18;
     const cw = this.container.clientWidth - 28 - gutter;
     const ch = this.container.clientHeight - 2 * PAGE_GAP;
-    const ref = this.pages[0];
+    const ref = (this.pageMode === 'paged' && this.pages[this.currentPage - 1]) || this.pages[0];
     if (!ref) return;
     const d = this.dimsOf(ref, 1);
     if (this.zoomMode === 'auto') this.scale = Math.min(cw, MAX_AUTO_WIDTH) / d.cw;
@@ -169,7 +170,23 @@ export class PdfViewer extends EventTarget {
 
   layout() {
     for (const p of this.pages) this.sizePage(p);
+    if (this.pageMode === 'paged') {
+      for (const p of this.pages) p.div.classList.toggle('current', p.num === this.currentPage);
+      this.viewerEl.style.minWidth = `${this.container.clientWidth}px`;
+      this.viewerEl.style.minHeight = `${this.container.clientHeight}px`;
+    } else {
+      for (const p of this.pages) p.div.classList.remove('current');
+      this.viewerEl.style.minWidth = ''; this.viewerEl.style.minHeight = '';
+    }
     this.measure();
+  }
+  /** Escala que ajusta a página atual inteira à tela. */
+  fitScale() {
+    const p = this.pages[this.currentPage - 1] || this.pages[0];
+    if (!p) return 1;
+    const d = this.dimsOf(p, 1);
+    const gutter = this.container.offsetWidth - this.container.clientWidth > 0 ? 0 : 18;
+    return Math.min((this.container.clientWidth - 28 - gutter) / d.cw, (this.container.clientHeight - 2 * PAGE_GAP) / d.ch);
   }
   sizePage(p) {
     const g = this.dimsOf(p);
@@ -184,12 +201,17 @@ export class PdfViewer extends EventTarget {
   measure() { this.tops = this.pages.map(p => p.div.offsetTop); }
 
   getPosition() {
+    if (this.pageMode === 'paged') {
+      const p = this.pages[this.currentPage - 1];
+      return { page: this.currentPage, yRatio: p ? clamp((this.container.scrollTop - this.tops[this.currentPage - 1]) / p.height, 0, 1) : 0 };
+    }
     const i = this.pageIndexAt(this.container.scrollTop);
     const p = this.pages[i];
     if (!p) return { page: 1, yRatio: 0 };
     return { page: p.num, yRatio: clamp((this.container.scrollTop - this.tops[i]) / p.height, 0, 1) };
   }
   pageIndexAt(y) {
+    if (this.pageMode === 'paged') return this.currentPage - 1;
     const tops = this.tops;
     let lo = 0, hi = tops.length - 1;
     while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (tops[mid] - 7 <= y) lo = mid; else hi = mid - 1; }
@@ -235,12 +257,14 @@ export class PdfViewer extends EventTarget {
   setPageMode(mode) {
     const pos = this.getPosition();
     this.pageMode = mode;
+    this.currentPage = pos.page;
     this.container.classList.toggle('paged', mode === 'paged');
     if (mode === 'paged') this.zoomMode = 'page-fit';
     else if (this.zoomMode === 'page-fit') this.zoomMode = 'auto';
     this.computeScale();
     this.applyLayout(null);
     this.goTo(pos.page, mode === 'paged' ? 0 : pos.yRatio);
+    this.dispatchEvent(new CustomEvent('pagechange', { detail: { page: this.currentPage, numPages: this.numPages } }));
   }
 
   anchorAt(cx, cy) {
@@ -281,21 +305,53 @@ export class PdfViewer extends EventTarget {
     page = clamp(Math.round(page) || 1, 1, this.numPages);
     const i = page - 1;
     if (!this.pages[i]) return;
-    const gap = this.pageMode === 'paged' ? 0 : (yRatio ? 0 : 6);
+    if (this.pageMode === 'paged') {
+      const changed = page !== this.currentPage;
+      if (changed) {
+        this.currentPage = page;
+        for (const p of this.pages) p.div.classList.toggle('current', p.num === page);
+        if (this.zoomMode === 'page-fit') { this.computeScale(); for (const p of this.pages) this.sizePage(p); }
+        this.measure();
+      }
+      this.container.scrollTop = this.tops[i] + yRatio * this.pages[i].height;
+      if (changed) this.dispatchEvent(new CustomEvent('pagechange', { detail: { page, numPages: this.numPages } }));
+      this.update();
+      return;
+    }
+    const gap = yRatio ? 0 : 6;
     this.container.scrollTop = this.tops[i] + yRatio * this.pages[i].height - gap;
     this.update();
   }
-  nextPage() { this.goTo(this.currentPage + 1); }
-  prevPage() { this.goTo(this.currentPage - 1); }
+  nextPage() { this.turnPage(1); }
+  prevPage() { this.turnPage(-1); }
+  /** Vira a página; no modo paginado com trava, mantém zoom e enquadramento. */
+  turnPage(delta) {
+    const target = this.currentPage + delta;
+    if (target < 1 || target > this.numPages) return;
+    if (this.pageMode !== 'paged') { this.goTo(target); return; }
+    const c = this.container;
+    const keep = this.viewLock ? { left: c.scrollLeft, yRatio: clamp((c.scrollTop - this.tops[this.currentPage - 1]) / (this.pages[this.currentPage - 1].height || 1), 0, 1) } : null;
+    this.goTo(target, keep ? keep.yRatio : 0);
+    if (keep) c.scrollLeft = keep.left;
+  }
 
   // ------------------------------------------------------------ virtualização
   update() {
     if (!this.pdf || !this.pages.length) return;
+    if (this.pageMode === 'paged') {
+      const ci = this.currentPage - 1;
+      const wanted = [ci, ci + 1, ci - 1].filter(i => i >= 0 && i < this.pages.length);
+      this.renderQueue = wanted.map(i => this.pages[i]).filter(p => !p.rendered && !p.rendering);
+      this.pump();
+      for (let i = 0; i < this.pages.length; i++) if (Math.abs(i - ci) > 2) { const p = this.pages[i]; if (p.rendered || p.rendering) this.cleanupPage(p); }
+      this.dispatchEvent(new CustomEvent('scroll', { detail: { first: this.currentPage, last: this.currentPage } }));
+      return;
+    }
     const top = this.container.scrollTop, bottom = top + this.container.clientHeight;
     const first = this.pageIndexAt(top);
     let last = first;
     while (last + 1 < this.pages.length && this.tops[last + 1] < bottom) last++;
-    const cur = this.pageIndexAt(top + this.container.clientHeight * (this.pageMode === 'paged' ? 0.5 : 0.33)) + 1;
+    const cur = this.pageIndexAt(top + this.container.clientHeight * 0.33) + 1;
     if (cur !== this.currentPage) {
       this.currentPage = cur;
       this.dispatchEvent(new CustomEvent('pagechange', { detail: { page: cur, numPages: this.numPages } }));
@@ -590,6 +646,39 @@ export class PdfViewer extends EventTarget {
   // ------------------------------------------------------------ gestos
   _setupGestures() {
     const c = this.container;
+    // deslizar para virar a página (modo paginado) e duplo toque para ampliar
+    let swipe = null, lastTap = 0, lastTapX = 0, lastTapY = 0;
+    c.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1 || this.inkActive) { swipe = null; return; }
+      const t = e.touches[0];
+      swipe = { x: t.clientX, y: t.clientY, t: Date.now(), left: c.scrollLeft };
+    }, { passive: true });
+    c.addEventListener('touchend', (e) => {
+      if (!swipe || e.touches.length) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y, dt = Date.now() - swipe.t;
+      const s = swipe; swipe = null;
+      if (this.pageMode === 'paged' && dt < 1200 && Math.abs(dx) > 60 && Math.abs(dy) < Math.abs(dx) * 0.6 && !window.getSelection()?.toString()) {
+        const atRight = c.scrollLeft + c.clientWidth >= c.scrollWidth - 2, atLeft = c.scrollLeft <= 2;
+        const moved = Math.abs(c.scrollLeft - s.left) > 4;
+        if (dx < 0 && atRight && !moved) { this.nextPage(); return; }
+        if (dx > 0 && atLeft && !moved) { this.prevPage(); return; }
+      }
+      if (dt < 300 && Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+        const now = Date.now();
+        if (now - lastTap < 320 && Math.abs(t.clientX - lastTapX) < 30 && Math.abs(t.clientY - lastTapY) < 30) {
+          lastTap = 0;
+          if (this.pdf && !window.getSelection()?.toString()) {
+            const fit = this.pageMode === 'paged' ? this.fitScale() : null;
+            if (fit && this.scale > fit * 1.08) this.setZoom('page-fit');
+            else if (!fit && this.zoomMode !== 'auto') this.setZoom('auto');
+            else this.zoomTo(this.scale * 2.2, t.clientX, t.clientY);
+          }
+          return;
+        }
+        lastTap = now; lastTapX = t.clientX; lastTapY = t.clientY;
+      }
+    }, { passive: true });
     c.addEventListener('wheel', (e) => {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();

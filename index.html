@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Leitor — PDF, anotações e tradução</title>
 <meta name="description" content="Leitor de livros e PDFs com destaques, anotações gravadas no PDF, dicionário e tradução contextual para quem estuda outro idioma.">
 <meta name="theme-color" content="#1f2430">
@@ -55,6 +55,7 @@
   <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M4 16l8.5-8.5a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L13 19H8z"/><path d="M4 20h16"/></symbol>
   <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></symbol>
   <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/><rect x="9" y="9" width="6" height="6" rx="1"/></symbol>
   <symbol id="i-crop" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14"/></symbol>
   <symbol id="i-scroll" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1"/><path d="M12 8v8M9.5 13.5L12 16l2.5-2.5"/></symbol>
   <symbol id="i-paged" viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></symbol>
@@ -229,10 +230,13 @@
         <button class="btn small toggle" data-more="scroll"><svg class="icon"><use href="#i-scroll"/></svg> Rolagem</button>
         <button class="btn small toggle" data-more="paged"><svg class="icon"><use href="#i-paged"/></svg> Página a página</button>
       </div>
+      <button data-more="viewlock"><svg class="icon"><use href="#i-fit"/></svg> Travar zoom e enquadramento <span class="menu-check"></span></button>
       <button data-more="crop"><svg class="icon"><use href="#i-crop"/></svg> Cortar margens <span class="menu-check"></span></button>
       <button data-more="rotate"><svg class="icon"><use href="#i-rotate"/></svg> Girar 90°</button>
       <button data-more="night"><svg class="icon"><use href="#i-moon"/></svg> Modo noturno das páginas <span class="menu-check"></span></button>
       <button data-more="tts"><svg class="icon"><use href="#i-speaker"/></svg> Ler em voz alta</button>
+      <div class="menu-section">Tradução</div>
+      <button data-more="autopopup"><svg class="icon"><use href="#i-translate"/></svg> Tradução automática ao selecionar <span class="menu-check"></span></button>
       <button data-more="fullscreen"><svg class="icon"><use href="#i-fullscreen"/></svg> Tela cheia <span class="muted">F</span></button>
       <div class="menu-section">Arquivo</div>
       <button data-more="download"><svg class="icon"><use href="#i-download"/></svg> Baixar PDF com anotações</button>
@@ -261,6 +265,7 @@
     </div>
 
     <div id="word-popup" class="word-popup" hidden></div>
+    <div id="page-chip" class="page-chip" aria-hidden="true"></div>
 
     <div id="ann-menu" class="sel-toolbar ann-menu" hidden>
       <div class="swatches">
@@ -292,6 +297,7 @@
         <label>Tema <select id="set-theme"><option value="system">Automático</option><option value="light">Claro</option><option value="dark">Escuro</option><option value="sepia">Sépia</option></select></label>
         <label class="check"><input type="checkbox" id="set-night"> Modo noturno das páginas (inverter cores do PDF)</label>
         <label class="check"><input type="checkbox" id="set-tapzones"> No modo página a página, tocar nas bordas vira a página</label>
+        <label class="check"><input type="checkbox" id="set-wakelock"> Manter a tela ligada durante a leitura</label>
         <label>Nome do autor das anotações <input type="text" id="set-author" placeholder="Seu nome (gravado no PDF)"></label>
 
         <h3>Tradução contextual com IA (Claude)</h3>

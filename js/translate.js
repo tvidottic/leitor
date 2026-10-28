@@ -4,7 +4,8 @@ import { cacheGet, cacheSet, settings } from './db.js';
 import { langName } from './utils.js';
 
 const GOOGLE_URL = 'https://translate.googleapis.com/translate_a/single';
-const MAX_CHUNK = 4500;
+const MAX_CHUNK = 1800;
+const FALLBACK_CHUNK = 450;
 
 /**
  * Tradução via Google Tradutor (endpoint público usado pela extensão do Chrome).
@@ -30,12 +31,21 @@ export async function googleTranslate(text, { sl = 'auto', tl = 'pt', signal } =
   const short = q.length < 60;
   const params = new URLSearchParams({ client: 'gtx', sl, tl, dj: '1', hl: tl.split('-')[0], q });
   for (const dt of ['t', 'rm', ...(short ? ['bd', 'md', 'ex', 'at'] : [])]) params.append('dt', dt);
-  const res = await fetch(`${GOOGLE_URL}?${params}`, { signal });
-  if (!res.ok) throw new Error(`Google Tradutor indisponível (${res.status})`);
+  let res;
+  try {
+    res = await fetch(GOOGLE_URL, { method: 'POST', body: params, signal });
+    if (!res.ok) throw new Error(String(res.status));
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err;
+    res = await fetch(`${GOOGLE_URL}?${params}`, { signal });
+    if (!res.ok) throw new Error(`Google Tradutor indisponível (${res.status})`);
+  }
   const data = await res.json();
-  const sentences = (data.sentences || []).filter(s => s.trans);
+  const sentences = (data.sentences || []).filter(s => typeof s.trans === 'string');
+  const joined = sentences.map(s => s.trans).join('');
+  if (!joined.trim()) throw new Error('O Google Tradutor não retornou texto.');
   const out = {
-    text: sentences.map(s => s.trans).join(''),
+    text: joined,
     src: data.src || sl,
     transliteration: (data.sentences || []).find(s => s.src_translit)?.src_translit || '',
     dict: (data.dict || []).map(d => ({ pos: d.pos, terms: d.terms || [], entries: (d.entry || []).map(e => ({ word: e.word, reverse: e.reverse_translation || [], score: e.score || 0 })) })),
@@ -49,13 +59,21 @@ export async function googleTranslate(text, { sl = 'auto', tl = 'pt', signal } =
 
 /** Tradução de reserva (MyMemory), usada se o Google falhar. */
 export async function fallbackTranslate(text, { sl = 'auto', tl = 'pt', signal } = {}) {
-  const from = sl === 'auto' ? 'en' : sl;
-  const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.slice(0, 500))}&langpair=${from}|${tl}`, { signal });
-  if (!res.ok) throw new Error('Serviço de tradução indisponível');
-  const data = await res.json();
-  const t = data?.responseData?.translatedText;
-  if (!t) throw new Error('Serviço de tradução indisponível');
-  return { text: t, src: from, dict: [], definitions: [], examples: [], alternatives: [] };
+  const from = sl === 'auto' ? 'en' : sl.split('-')[0];
+  const all = splitChunks(text.trim(), FALLBACK_CHUNK);
+  const chunks = all.slice(0, 12);
+  const parts = [];
+  for (const c of chunks) {
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(c)}&langpair=${from}|${tl.split('-')[0]}`, { signal });
+    if (!res.ok) throw new Error('Serviço de tradução indisponível');
+    const data = await res.json();
+    const t = data?.responseData?.translatedText;
+    if (typeof t !== 'string' || !t || data.responseStatus === 403 || /MYMEMORY WARNING|QUERY LENGTH/i.test(t)) throw new Error('Serviço de reserva indisponível no momento');
+    parts.push(t);
+  }
+  const joined = parts.join(' ').trim();
+  if (!joined) throw new Error('Tradução vazia');
+  return { text: joined, src: from, dict: [], definitions: [], examples: [], alternatives: [], via: 'reserva', truncated: chunks.length < all.length };
 }
 
 export async function translate(text, opts = {}) {
@@ -105,7 +123,12 @@ export function googleTranslateUrl(text, { sl = 'auto', tl = 'pt' } = {}) {
 function splitChunks(text, max) {
   const out = [];
   let cur = '';
+  const pieces = [];
   for (const s of text.split(/(?<=[.!?…])\s+/)) {
+    if (s.length <= max) { pieces.push(s); continue; }
+    for (let i = 0; i < s.length; i += max) pieces.push(s.slice(i, i + max)); // frase enorme sem pontuação
+  }
+  for (const s of pieces) {
     if ((cur + ' ' + s).length > max && cur) { out.push(cur); cur = s; }
     else cur = cur ? `${cur} ${s}` : s;
   }

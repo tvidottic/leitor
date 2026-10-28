@@ -84,7 +84,8 @@ export class TranslationPanel {
       this.current.src = r.src;
       $('#tr-src-badge', origBlock).textContent = r.src || sl;
       const main = $('#tr-main', mainBlock);
-      main.replaceChildren(document.createTextNode(r.text));
+      main.replaceChildren(document.createTextNode(r.text || ''));
+      if (r.via === 'reserva') main.append(el('div', { class: 'muted', style: { fontSize: '12px', fontFamily: 'var(--font)' }, text: r.truncated ? 'Tradução parcial pelo serviço de reserva (Google indisponível). Abra no Google Tradutor para o texto completo.' : 'Traduzido pelo serviço de reserva (Google indisponível).' }));
       if (r.transliteration) main.append(el('div', { class: 'muted', style: { fontSize: '13px', fontFamily: 'var(--font)' }, text: r.transliteration }));
       this.renderDict(dictBlock, r, text, ctrl.signal);
     } catch (err) {

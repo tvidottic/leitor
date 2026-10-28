@@ -77,7 +77,7 @@ class App {
         tl: tl.value, sl: sl.value,
         autoPopup: $('#set-autopopup').checked, tapWord: $('#set-tapword').checked, dict: $('#set-dict').checked,
         theme: $('#set-theme').value, night: $('#set-night').checked, tapZones: $('#set-tapzones').checked,
-        author: $('#set-author').value.trim(),
+        author: $('#set-author').value.trim(), wakeLock: $('#set-wakelock').checked,
         apiKey: $('#set-apikey').value.trim(), model: $('#set-model').value, effort: $('#set-effort').value, level: $('#set-level').value,
         gClientId: $('#set-gclient').value.trim(), dbxAppKey: $('#set-dbxkey').value.trim(),
       };
@@ -101,7 +101,7 @@ class App {
     $('#set-tl').value = s.tl; $('#set-sl').value = s.sl;
     $('#set-autopopup').checked = s.autoPopup; $('#set-tapword').checked = s.tapWord; $('#set-dict').checked = s.dict;
     $('#set-theme').value = s.theme; $('#set-night').checked = s.night; $('#set-tapzones').checked = s.tapZones !== false;
-    $('#set-author').value = s.author || '';
+    $('#set-author').value = s.author || ''; $('#set-wakelock').checked = s.wakeLock !== false;
     $('#set-apikey').value = s.apiKey || ''; $('#set-model').value = s.model; $('#set-effort').value = s.effort; $('#set-level').value = s.level;
     $('#set-gclient').value = s.gClientId || ''; $('#set-dbxkey').value = s.dbxAppKey || '';
     this._updateStorageInfo();

@@ -80,7 +80,9 @@ export class Reader {
         if (changed) { blob = await this.app.library.getFile(book.id); toast('Arquivo atualizado a partir da origem.'); }
       }
       const data = await blob.arrayBuffer();
+      this.viewer.viewLock = book.viewLock !== false;
       await this.viewer.load(data, { page: book.lastPage || 1, yRatio: book.yRatio || 0, zoomMode: book.zoomMode || 'auto', rotation: book.rotation || 0, cropMargins: !!book.cropMargins, pageMode: book.pageMode || 'scroll' });
+      this.requestWakeLock();
       $('#loading').hidden = true;
       await this.ann.load(book.id);
       $('#page-count').textContent = this.viewer.numPages;
@@ -113,6 +115,8 @@ export class Reader {
   }
 
   async close() {
+    this.releaseWakeLock();
+    this.el.classList.remove('hide-ui');
     this.stopTts();
     this.setInk(false);
     this.stopSession();
@@ -147,9 +151,17 @@ export class Reader {
   async savePositionNow() {
     if (!this.book || !this.viewer.pdf) return;
     const pos = this.viewer.getPosition();
-    Object.assign(this.book, { lastPage: pos.page, yRatio: pos.yRatio, zoomMode: this.viewer.zoomMode, rotation: this.viewer.rotation, cropMargins: this.viewer.cropMargins, pageMode: this.viewer.pageMode, lastOpenedAt: Date.now() });
+    Object.assign(this.book, { lastPage: pos.page, yRatio: pos.yRatio, zoomMode: this.viewer.zoomMode, rotation: this.viewer.rotation, cropMargins: this.viewer.cropMargins, pageMode: this.viewer.pageMode, viewLock: this.viewer.viewLock, lastOpenedAt: Date.now() });
     await this.app.library.updateBook(this.book);
   }
+
+  // ---- tela ligada (Wake Lock)
+  async requestWakeLock() {
+    if (settings().wakeLock === false || !navigator.wakeLock || document.hidden) return;
+    try { this.wakeLock = await navigator.wakeLock.request('screen'); this.wakeLock.addEventListener('release', () => { this.wakeLock = null; }); } catch { /* ignorado */ }
+    if (!this._wakeVis) { this._wakeVis = () => { if (!document.hidden && this.book) this.requestWakeLock(); }; document.addEventListener('visibilitychange', this._wakeVis); }
+  }
+  releaseWakeLock() { try { this.wakeLock?.release(); } catch { /* ignore */ } this.wakeLock = null; }
 
   // ---- tempo de leitura
   startSession() { this.sessionStart = Date.now(); this._sessionTimer = setInterval(() => this.flushSession(), 60_000); document.addEventListener('visibilitychange', this._onVis = () => { document.hidden ? this.flushSession(true) : this.sessionStart = Date.now(); }); }
@@ -221,6 +233,7 @@ export class Reader {
       this.markCurrentThumb(e.detail.page);
       this.updateBookmarkButton();
       this.savePosition();
+      this.showPageChip(e.detail.page, e.detail.numPages);
     });
     this.viewer.addEventListener('scalechange', () => { this.updateZoomSelect(); this.savePosition(); this.repositionSelectionUi(); });
     this.viewer.addEventListener('scroll', () => { this.savePosition(); this.repositionSelectionUi(); });
@@ -231,6 +244,21 @@ export class Reader {
       const t = await this.viewer.resolveDest(dest);
       if (t) this.jumpTo(t.page, t.yRatio);
     });
+  }
+
+  showPageChip(page, total) {
+    if (!this.el.classList.contains('hide-ui') && !this.el.classList.contains('immersive')) return;
+    const chip = $('#page-chip');
+    chip.textContent = `${page} / ${total}`;
+    chip.classList.add('show');
+    clearTimeout(this._chipTimer);
+    this._chipTimer = setTimeout(() => chip.classList.remove('show'), 1400);
+  }
+  toggleUi() {
+    this.el.classList.toggle('hide-ui');
+    this.clearSelectionUi();
+    this.layoutChanged();
+    if (this.el.classList.contains('hide-ui')) this.showPageChip(this.viewer.currentPage, this.viewer.numPages);
   }
 
   // ---- histórico de navegação
@@ -287,9 +315,11 @@ export class Reader {
       const btn = e.target.closest('[data-more]');
       if (!btn) return;
       const act = btn.dataset.more;
-      if (act !== 'crop' && act !== 'night' && act !== 'scroll' && act !== 'paged') this.toggleMoreMenu(false);
+      if (!['crop', 'night', 'scroll', 'paged', 'viewlock', 'autopopup'].includes(act)) this.toggleMoreMenu(false);
       switch (act) {
-        case 'scroll': case 'paged': this.viewer.setPageMode(act); this.updateMoreMenu(); this.savePosition(); break;
+        case 'scroll': case 'paged': this.viewer.setPageMode(act); this.updateMoreMenu(); this.savePosition(); toast(act === 'paged' ? 'Página a página: deslize ou toque nas bordas para virar; duplo toque amplia.' : 'Rolagem contínua.'); break;
+        case 'viewlock': this.viewer.viewLock = !this.viewer.viewLock; this.updateMoreMenu(); this.savePosition(); break;
+        case 'autopopup': { const on = !settings().autoPopup; await saveSettings({ autoPopup: on }); this.updateMoreMenu(); toast(on ? 'Tradução automática ao selecionar ativada.' : 'Tradução automática desativada: use o botão de tradução na barra de seleção.'); break; }
         case 'crop': await this.viewer.setCropMargins(!this.viewer.cropMargins); this.updateMoreMenu(); this.savePosition(); break;
         case 'rotate': this.viewer.setRotation(this.viewer.rotation + 90); this.savePosition(); break;
         case 'night': { const n = !settings().night; await saveSettings({ night: n }); this.applyNight(n); this.updateMoreMenu(); break; }
@@ -319,6 +349,9 @@ export class Reader {
     $('[data-more="scroll"]', menu).classList.toggle('active', this.viewer.pageMode === 'scroll');
     $('[data-more="paged"]', menu).classList.toggle('active', this.viewer.pageMode === 'paged');
     $('[data-more="crop"]', menu).classList.toggle('on', this.viewer.cropMargins);
+    $('[data-more="viewlock"]', menu).classList.toggle('on', this.viewer.viewLock);
+    $('[data-more="viewlock"]', menu).disabled = this.viewer.pageMode !== 'paged';
+    $('[data-more="autopopup"]', menu).classList.toggle('on', !!settings().autoPopup);
     $('[data-more="night"]', menu).classList.toggle('on', !!settings().night);
   }
   toggleFullscreen() { if (document.fullscreenElement) document.exitFullscreen(); else (this.el.requestFullscreen || document.documentElement.requestFullscreen)?.call(this.el).catch?.(() => toast('Tela cheia não disponível neste navegador.')); }
@@ -634,8 +667,18 @@ export class Reader {
 
   // =============================================================== seleção de texto
   _bindSelection() {
-    const onSelChange = debounce(() => this.onSelectionChange(), isCoarsePointer() ? 350 : 120);
-    document.addEventListener('selectionchange', onSelChange);
+    const coarse = isCoarsePointer();
+    const onSelChange = debounce(() => this.onSelectionChange(), coarse ? 700 : 120);
+    document.addEventListener('selectionchange', () => {
+      if (this.touching) { this.pendingSel = true; this.hideSelToolbar(); this.hideWordPopup(); return; }
+      onSelChange();
+    });
+    // no toque, espera o dedo soltar e a seleção se estabilizar antes de mostrar as opções
+    this.container.addEventListener('touchstart', () => { this.touching = true; }, { passive: true });
+    const touchDone = () => { this.touching = false; if (this.pendingSel) { this.pendingSel = false; onSelChange(); } };
+    this.container.addEventListener('touchend', touchDone, { passive: true });
+    this.container.addEventListener('touchcancel', touchDone, { passive: true });
+    if (coarse) { this.selToolbar.classList.add('bottom'); this.wordPopup.classList.add('bottom'); }
     this.container.addEventListener('pointerdown', e => {
       const tl = e.target.closest?.('.textLayer');
       if (tl) tl.classList.add('selecting');
@@ -703,6 +746,7 @@ export class Reader {
   }
   positionSelToolbar() {
     if (this.selToolbar.hidden || !this.selAnchor) return;
+    if (this.selToolbar.classList.contains('bottom')) return; // fixa na base da tela (toque)
     const a = this.selAnchor;
     const tw = this.selToolbar.offsetWidth, th = this.selToolbar.offsetHeight;
     const cr = this.container.getBoundingClientRect();
@@ -740,7 +784,7 @@ export class Reader {
       const r = await translate(text, { sl: s.sl, tl: s.tl, signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       this.lastQuick = { text, page, translation: r.text, src: r.src };
-      const trans = r.text.length > 420 ? `${r.text.slice(0, 420)}…` : r.text;
+      const trans = (r.text.length > 420 ? `${r.text.slice(0, 420)}…` : r.text) + (r.truncated ? ' (parcial)' : '');
       const alts = (r.dict?.[0]?.terms || r.alternatives || []).filter(t => t.toLowerCase() !== r.text.toLowerCase()).slice(0, 4);
       popup.replaceChildren(
         el('div', { class: 'wp-word' }, el('span', { text: text.length > 60 ? `${text.slice(0, 60)}…` : text }),
@@ -760,6 +804,11 @@ export class Reader {
   }
   positionWordPopup() {
     if (this.wordPopup.hidden) return;
+    if (this.wordPopup.classList.contains('bottom')) {
+      const above = this.selToolbar.hidden ? 8 : this.selToolbar.offsetHeight + 16;
+      this.wordPopup.style.bottom = `calc(${above}px + env(safe-area-inset-bottom))`;
+      return;
+    }
     const sel = window.getSelection();
     if (!sel?.rangeCount) return;
     const range = sel.getRangeAt(0);
@@ -828,7 +877,8 @@ export class Reader {
       if (fx < 0.18) { this.viewer.prevPage(); return; }
       if (fx > 0.82) { this.viewer.nextPage(); return; }
     }
-    this._immersiveTap?.();
+    if (this._immersiveTap?.()) return;
+    if (isCoarsePointer() && e.target.closest('.page')) this.toggleUi();
   }
   showAnnMenu(a, cx, cy) {
     this.annMenu.dataset.id = a.id;

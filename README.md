@@ -63,7 +63,7 @@ Dropbox); capa, progresso, tempo de leitura, renomear, baixar o PDF anotado, vin
 origem é reverificado ao abrir: se foi anotado em outro aplicativo, a versão nova é carregada e as anotações
 importadas.
 
-**Leitura** — rolagem contínua ou **página a página** (com toque nas bordas para virar), zoom por largura/página/
+**Leitura** — rolagem contínua ou **página a página** (uma página por vez: deslize para o lado ou toque nas bordas para virar, duplo toque amplia, e com “Travar zoom e enquadramento” a página seguinte abre no mesmo zoom e posição), zoom por largura/página/
 porcentagem, pinça no tablet, Ctrl+roda no desktop, **cortar margens** (detecta a área útil da página, ideal em
 tablets), **girar**, miniaturas, sumário com links clicáveis do próprio PDF, marcadores de página, busca no documento,
 histórico de navegação (botão “voltar” após saltos), **tela cheia imersiva** (barra oculta; aparece ao passar o
@@ -117,6 +117,13 @@ abra o PDF pela opção “Do dispositivo, vinculado ao arquivo”. O Leitor gra
 Full Dropbox, permissões `files.metadata.read`, `files.content.read` e `files.content.write`). Em “Redirect URIs”,
 adicione o endereço do Leitor com barra final (ex.: `http://localhost:8787/`). Cole a **App key** em
 Configurações → Nuvem. O login usa OAuth PKCE, sem segredo do app.
+
+## No celular e no tablet
+
+- Toque no centro da página para esconder ou mostrar a barra; um indicador discreto mostra a página atual.
+- Ao selecionar texto, as opções do Leitor só aparecem depois que você solta o dedo, em uma barra na base da tela, longe do menu do próprio navegador. A tradução automática pode ser desligada no menu “⋯”.
+- Modo página a página: deslize para o lado, toque nas bordas ou use o duplo toque para ampliar. O zoom e o enquadramento se mantêm ao virar a página.
+- A tela fica ligada durante a leitura (pode desativar nas configurações).
 
 ## Atalhos de teclado
 
