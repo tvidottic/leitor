@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leitor — PDF, anotações e tradução</title>
+<meta name="description" content="Leitor de livros e PDFs com destaques, anotações gravadas no PDF, dicionário e tradução contextual para quem estuda outro idioma.">
+<meta name="theme-color" content="#1f2430">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Leitor">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- Ícones (sprite SVG) -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-zoom-in" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></symbol>
+  <symbol id="i-zoom-out" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+  <symbol id="i-highlight" viewBox="0 0 24 24"><path d="M9 11l-6 6v3h3l6-6M14 6l4 4M9 11l5-5 4 4-5 5"/><path d="M4 21h16"/></symbol>
+  <symbol id="i-underline" viewBox="0 0 24 24"><path d="M7 4v7a5 5 0 0 0 10 0V4M5 20h14"/></symbol>
+  <symbol id="i-strike" viewBox="0 0 24 24"><path d="M6 12h12M8 6.5A4 4 0 0 1 12 5c2.5 0 4 1.3 4 3M16 17.5A4 4 0 0 1 12 19c-2.5 0-4-1.3-4-3"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 12h5"/></symbol>
+  <symbol id="i-translate" viewBox="0 0 24 24"><path d="M3 5h10M8 3v2M5 9c1.5 2.5 4 4.5 7 6M11 9c-1.2 3-4 6-8 8"/><path d="M13 21l4-10 4 10M14.5 17h5"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-pages" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 8h6M9 12h6M9 16h4"/></symbol>
+  <symbol id="i-toc" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.8 5.9 6.2.8-4.5 4.4 1.1 6.4L12 17.5 6.4 20.5l1.1-6.4L3 9.7l6.2-.8z"/></symbol>
+  <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 10v4h3l4 4V6L7 10zM15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+  <symbol id="i-fullscreen" viewBox="0 0 24 24"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 13A8 8 0 1 1 11 3a6.5 6.5 0 0 0 10 10z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></symbol>
+  <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4h7a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4zM20 4h-7a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h7z"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l4-1 10.5-10.5a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M13 7l3 3"/></symbol>
+  <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M4 16l8.5-8.5a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L13 19H8z"/><path d="M4 20h16"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></symbol>
+  <symbol id="i-crop" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14"/></symbol>
+  <symbol id="i-scroll" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1"/><path d="M12 8v8M9.5 13.5L12 16l2.5-2.5"/></symbol>
+  <symbol id="i-paged" viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4h4v16H7zM13 4h4v16h-4z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 18 9.5a4.5 4.5 0 0 1-.5 8.5z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5"/></symbol>
+  <symbol id="i-wiki" viewBox="0 0 24 24"><path d="M3 6l4 12 3-8 3 8 4-12M2 6h5M17 6h5M9 6h6"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5M12 8v4l3 2"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</svg>
+
+<div id="app" data-view="library">
+
+  <!-- ====================== BIBLIOTECA ====================== -->
+  <section id="library" class="view">
+    <header class="lib-header">
+      <div class="brand"><svg class="icon lg"><use href="#i-book"/></svg><h1>Leitor</h1></div>
+      <div class="lib-actions">
+        <label class="search-field"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="lib-search" placeholder="Buscar na biblioteca…" aria-label="Buscar na biblioteca"></label>
+        <button id="btn-import" class="btn primary"><svg class="icon"><use href="#i-plus"/></svg><span>Abrir PDF</span></button>
+        <button id="btn-settings-lib" class="btn icon ghost" title="Configurações" aria-label="Configurações"><svg class="icon"><use href="#i-settings"/></svg></button>
+      </div>
+    </header>
+    <div id="dropzone" class="dropzone">
+      <svg class="icon xl"><use href="#i-export"/></svg>
+      <p><strong>Arraste PDFs para aqui</strong> ou clique em “Abrir PDF” para abrir do dispositivo, do Google Drive ou do Dropbox.</p>
+      <p class="muted">Os livros ficam salvos neste dispositivo. Destaques e notas são gravados dentro do próprio PDF.</p>
+    </div>
+    <div id="book-grid" class="book-grid" aria-live="polite"></div>
+    <input type="file" id="file-input" accept="application/pdf,.pdf" multiple hidden>
+  </section>
+
+  <!-- ====================== LEITOR ====================== -->
+  <section id="reader" class="view" hidden>
+    <header class="toolbar" id="toolbar">
+      <div class="tb-group">
+        <button class="btn icon" id="btn-back" title="Voltar à biblioteca"><svg class="icon"><use href="#i-back"/></svg></button>
+        <button class="btn icon" id="btn-sidebar" title="Painel lateral (S)"><svg class="icon"><use href="#i-menu"/></svg></button>
+        <span class="book-title" id="book-title">—</span>
+        <button class="save-status" id="save-status" title="Estado da gravação das anotações no PDF" hidden></button>
+      </div>
+      <div class="tb-group center">
+        <button class="btn icon" id="btn-hist-back" title="Voltar à posição anterior (Alt+←)" hidden><svg class="icon"><use href="#i-history"/></svg></button>
+        <button class="btn icon" id="btn-prev" title="Página anterior"><svg class="icon"><use href="#i-prev"/></svg></button>
+        <span class="page-ctrl"><input type="number" id="page-input" min="1" value="1" aria-label="Página"> <span class="muted">/ <span id="page-count">0</span></span></span>
+        <button class="btn icon" id="btn-next" title="Próxima página"><svg class="icon"><use href="#i-next"/></svg></button>
+        <span class="sep"></span>
+        <button class="btn icon" id="btn-zoom-out" title="Reduzir (-)"><svg class="icon"><use href="#i-zoom-out"/></svg></button>
+        <select id="zoom-select" aria-label="Zoom">
+          <option value="auto">Largura</option>
+          <option value="page-fit">Página</option>
+          <option value="0.75">75%</option>
+          <option value="1">100%</option>
+          <option value="1.25">125%</option>
+          <option value="1.5">150%</option>
+          <option value="2">200%</option>
+          <option value="3">300%</option>
+        </select>
+        <button class="btn icon" id="btn-zoom-in" title="Ampliar (+)"><svg class="icon"><use href="#i-zoom-in"/></svg></button>
+      </div>
+      <div class="tb-group right">
+        <button class="btn icon toggle" id="btn-tap-mode" title="Toque na palavra para traduzir (W)"><svg class="icon"><use href="#i-pointer"/></svg></button>
+        <button class="btn icon toggle" id="btn-ink" title="Caneta (P)"><svg class="icon"><use href="#i-pen"/></svg></button>
+        <button class="btn icon toggle" id="btn-bookmark" title="Marcar página (B)"><svg class="icon"><use href="#i-bookmark"/></svg></button>
+        <button class="btn icon" id="btn-search" title="Buscar no documento (Ctrl+F)"><svg class="icon"><use href="#i-search"/></svg></button>
+        <button class="btn icon" id="btn-panel" title="Painel de tradução (T)"><svg class="icon"><use href="#i-translate"/></svg></button>
+        <button class="btn icon" id="btn-more" title="Mais opções"><svg class="icon"><use href="#i-more"/></svg></button>
+      </div>
+    </header>
+
+    <!-- Barra da caneta -->
+    <div class="subbar" id="ink-bar" hidden>
+      <div class="swatches ink-swatches">
+        <button class="swatch active" data-ink-color="black" title="Preto"></button>
+        <button class="swatch" data-ink-color="red" title="Vermelho"></button>
+        <button class="swatch" data-ink-color="ink-blue" title="Azul"></button>
+        <button class="swatch" data-ink-color="ink-green" title="Verde"></button>
+      </div>
+      <span class="sep"></span>
+      <button class="btn small ghost width-btn" data-ink-width="fina" title="Fina"><span class="w w1"></span></button>
+      <button class="btn small ghost width-btn active" data-ink-width="media" title="Média"><span class="w w2"></span></button>
+      <button class="btn small ghost width-btn" data-ink-width="grossa" title="Grossa"><span class="w w3"></span></button>
+      <span class="sep"></span>
+      <button class="btn small ghost toggle" id="btn-eraser" title="Borracha (toque no traço para apagar)"><svg class="icon"><use href="#i-eraser"/></svg> Borracha</button>
+      <button class="btn small ghost toggle" id="btn-pen-only" title="Ignorar toques de dedo (somente caneta)"><svg class="icon"><use href="#i-pen"/></svg> Só caneta</button>
+      <span class="grow"></span>
+      <button class="btn small ghost" id="btn-ink-done"><svg class="icon"><use href="#i-check"/></svg> Concluir</button>
+    </div>
+
+    <!-- Barra de leitura em voz alta -->
+    <div class="subbar" id="tts-bar" hidden>
+      <button class="btn icon" id="tts-play" title="Reproduzir / pausar"><svg class="icon"><use href="#i-pause"/></svg></button>
+      <button class="btn icon" id="tts-stop" title="Parar"><svg class="icon"><use href="#i-stop"/></svg></button>
+      <span class="muted" id="tts-status">Lendo a página…</span>
+      <span class="grow"></span>
+      <label class="muted small-label">Velocidade <input type="range" id="tts-rate" min="0.6" max="1.6" step="0.1" value="1"></label>
+    </div>
+
+    <div class="reader-body">
+      <aside id="sidebar" class="sidebar" hidden>
+        <nav class="tabs" role="tablist">
+          <button class="tab active" data-tab="thumbs" title="Páginas"><svg class="icon"><use href="#i-pages"/></svg></button>
+          <button class="tab" data-tab="outline" title="Sumário e marcadores"><svg class="icon"><use href="#i-toc"/></svg></button>
+          <button class="tab" data-tab="annots" title="Anotações"><svg class="icon"><use href="#i-highlight"/></svg></button>
+          <button class="tab" data-tab="vocab" title="Vocabulário"><svg class="icon"><use href="#i-star"/></svg></button>
+          <button class="tab" data-tab="search" title="Busca"><svg class="icon"><use href="#i-search"/></svg></button>
+          <button class="tab" data-tab="pagetr" title="Página traduzida"><svg class="icon"><use href="#i-text"/></svg></button>
+        </nav>
+        <div class="tab-panels">
+          <div class="tab-panel active" data-panel="thumbs" id="thumbs"></div>
+          <div class="tab-panel" data-panel="outline" id="outline-panel">
+            <div id="bookmarks"></div>
+            <div id="outline"><p class="muted pad">Este documento não tem sumário.</p></div>
+          </div>
+          <div class="tab-panel" data-panel="annots" id="annots">
+            <div class="panel-tools">
+              <span class="muted" id="annots-count">0 anotações</span>
+              <span class="grow"></span>
+              <button class="btn small ghost" id="btn-export-annots" title="Exportar anotações (Markdown)"><svg class="icon"><use href="#i-export"/></svg> Markdown</button>
+            </div>
+            <div id="annots-list" class="list"></div>
+          </div>
+          <div class="tab-panel" data-panel="vocab" id="vocab">
+            <div class="panel-tools">
+              <span class="muted" id="vocab-count">0 palavras</span>
+              <span class="grow"></span>
+              <button class="btn small ghost" id="btn-vocab-review" title="Revisar com cartões"><svg class="icon"><use href="#i-check"/></svg> Revisar</button>
+              <button class="btn small ghost" id="btn-export-vocab" title="Exportar CSV (Anki)"><svg class="icon"><use href="#i-export"/></svg> CSV</button>
+            </div>
+            <div id="vocab-list" class="list"></div>
+          </div>
+          <div class="tab-panel" data-panel="search" id="search">
+            <form id="search-form" class="search-form"><input type="search" id="search-input" placeholder="Buscar no documento…" autocomplete="off"><button class="btn primary small" type="submit">Buscar</button></form>
+            <div id="search-status" class="muted pad"></div>
+            <div id="search-results" class="list"></div>
+          </div>
+          <div class="tab-panel" data-panel="pagetr" id="pagetr">
+            <div class="panel-tools">
+              <span class="muted">Tradução da página atual, parágrafo a parágrafo.</span>
+              <button class="btn small primary" id="btn-translate-page"><svg class="icon"><use href="#i-translate"/></svg> Traduzir página</button>
+            </div>
+            <div id="pagetr-list" class="list"></div>
+          </div>
+        </div>
+      </aside>
+
+      <main id="viewer-container" class="viewer-container" tabindex="0">
+        <div id="viewer" class="viewer"></div>
+        <div id="loading" class="loading-overlay" hidden><div class="spinner"></div><span id="loading-text">Carregando…</span></div>
+      </main>
+
+      <aside id="panel" class="panel" hidden>
+        <header class="panel-head">
+          <svg class="icon"><use href="#i-translate"/></svg>
+          <strong>Tradução</strong>
+          <select id="panel-tl" class="small" aria-label="Idioma de destino"></select>
+          <button class="btn icon ghost" id="btn-panel-close" title="Fechar"><svg class="icon"><use href="#i-close"/></svg></button>
+        </header>
+        <div class="panel-body" id="panel-body">
+          <p class="muted pad">Selecione uma palavra, frase ou parágrafo no texto para traduzir. Em tablets, toque e segure para selecionar.</p>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Menu "mais" -->
+    <div id="more-menu" class="ctx-menu more-menu" hidden>
+      <div class="menu-section">Modo de leitura</div>
+      <div class="menu-row">
+        <button class="btn small toggle" data-more="scroll"><svg class="icon"><use href="#i-scroll"/></svg> Rolagem</button>
+        <button class="btn small toggle" data-more="paged"><svg class="icon"><use href="#i-paged"/></svg> Página a página</button>
+      </div>
+      <button data-more="crop"><svg class="icon"><use href="#i-crop"/></svg> Cortar margens <span class="menu-check"></span></button>
+      <button data-more="rotate"><svg class="icon"><use href="#i-rotate"/></svg> Girar 90°</button>
+      <button data-more="night"><svg class="icon"><use href="#i-moon"/></svg> Modo noturno das páginas <span class="menu-check"></span></button>
+      <button data-more="tts"><svg class="icon"><use href="#i-speaker"/></svg> Ler em voz alta</button>
+      <button data-more="fullscreen"><svg class="icon"><use href="#i-fullscreen"/></svg> Tela cheia <span class="muted">F</span></button>
+      <div class="menu-section">Arquivo</div>
+      <button data-more="download"><svg class="icon"><use href="#i-download"/></svg> Baixar PDF com anotações</button>
+      <button data-more="link-file" id="more-link-file"><svg class="icon"><use href="#i-link"/></svg> Salvar como… (vincular a um arquivo)</button>
+      <button data-more="reimport"><svg class="icon"><use href="#i-highlight"/></svg> Importar anotações do PDF</button>
+      <button data-more="settings"><svg class="icon"><use href="#i-settings"/></svg> Configurações</button>
+    </div>
+
+    <!-- Barra flutuante de seleção -->
+    <div id="sel-toolbar" class="sel-toolbar" hidden role="toolbar">
+      <div class="swatches">
+        <button class="swatch" data-color="yellow" title="Destacar amarelo (1)"></button>
+        <button class="swatch" data-color="green" title="Destacar verde (2)"></button>
+        <button class="swatch" data-color="blue" title="Destacar azul (3)"></button>
+        <button class="swatch" data-color="pink" title="Destacar rosa (4)"></button>
+      </div>
+      <button class="btn icon" data-act="underline" title="Sublinhar (U)"><svg class="icon"><use href="#i-underline"/></svg></button>
+      <button class="btn icon" data-act="strikeout" title="Riscar"><svg class="icon"><use href="#i-strike"/></svg></button>
+      <button class="btn icon" data-act="note" title="Anotação (N)"><svg class="icon"><use href="#i-note"/></svg></button>
+      <span class="sep"></span>
+      <button class="btn icon accent" data-act="translate" title="Traduzir (T)"><svg class="icon"><use href="#i-translate"/></svg></button>
+      <button class="btn icon accent" data-act="context" title="Traduzir no contexto, com explicações (IA) (C)"><svg class="icon"><use href="#i-sparkle"/></svg></button>
+      <button class="btn icon" data-act="vocab" title="Salvar no vocabulário (V)"><svg class="icon"><use href="#i-star"/></svg></button>
+      <button class="btn icon" data-act="speak" title="Ouvir"><svg class="icon"><use href="#i-speaker"/></svg></button>
+      <button class="btn icon" data-act="copy" title="Copiar"><svg class="icon"><use href="#i-copy"/></svg></button>
+    </div>
+
+    <div id="word-popup" class="word-popup" hidden></div>
+
+    <div id="ann-menu" class="sel-toolbar ann-menu" hidden>
+      <div class="swatches">
+        <button class="swatch" data-color="yellow"></button>
+        <button class="swatch" data-color="green"></button>
+        <button class="swatch" data-color="blue"></button>
+        <button class="swatch" data-color="pink"></button>
+      </div>
+      <button class="btn icon" data-act="note" title="Editar anotação"><svg class="icon"><use href="#i-note"/></svg></button>
+      <button class="btn icon accent" data-act="translate" title="Traduzir"><svg class="icon"><use href="#i-translate"/></svg></button>
+      <button class="btn icon" data-act="copy" title="Copiar"><svg class="icon"><use href="#i-copy"/></svg></button>
+      <button class="btn icon danger" data-act="delete" title="Excluir"><svg class="icon"><use href="#i-trash"/></svg></button>
+    </div>
+  </section>
+
+  <!-- ====================== DIÁLOGOS ====================== -->
+  <dialog id="settings-dialog" class="dialog">
+    <form method="dialog" class="dialog-form">
+      <header><h2>Configurações</h2><button class="btn icon ghost" value="cancel" formnovalidate title="Fechar"><svg class="icon"><use href="#i-close"/></svg></button></header>
+      <div class="dialog-body">
+        <h3>Idiomas</h3>
+        <label>Traduzir para <select id="set-tl"></select></label>
+        <label>Idioma do texto <select id="set-sl"></select></label>
+        <label class="check"><input type="checkbox" id="set-autopopup"> Mostrar tradução rápida ao selecionar um trecho</label>
+        <label class="check"><input type="checkbox" id="set-tapword"> Toque em uma palavra traduz (modo toque)</label>
+        <label class="check"><input type="checkbox" id="set-dict"> Buscar dicionário em inglês (definições, fonética, áudio)</label>
+
+        <h3>Aparência e leitura</h3>
+        <label>Tema <select id="set-theme"><option value="system">Automático</option><option value="light">Claro</option><option value="dark">Escuro</option><option value="sepia">Sépia</option></select></label>
+        <label class="check"><input type="checkbox" id="set-night"> Modo noturno das páginas (inverter cores do PDF)</label>
+        <label class="check"><input type="checkbox" id="set-tapzones"> No modo página a página, tocar nas bordas vira a página</label>
+        <label>Nome do autor das anotações <input type="text" id="set-author" placeholder="Seu nome (gravado no PDF)"></label>
+
+        <h3>Tradução contextual com IA (Claude)</h3>
+        <p class="muted">Opcional. A IA traduz com fidelidade e explica expressões idiomáticas, referências culturais e nuances. A chave fica salva apenas neste dispositivo e as chamadas vão direto para a API da Anthropic.</p>
+        <label>Chave da API <input type="password" id="set-apikey" placeholder="sk-ant-…" autocomplete="off"></label>
+        <label>Modelo <select id="set-model">
+          <option value="claude-opus-5-5">Claude Opus 5.5 (recomendado)</option>
+          <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (mais rápido)</option>
+          <option value="claude-haiku-5-5">Claude Haiku 5.5 (mais barato)</option>
+        </select></label>
+        <label>Profundidade <select id="set-effort">
+          <option value="low">Rápida</option>
+          <option value="medium">Equilibrada</option>
+          <option value="high">Aprofundada</option>
+        </select></label>
+        <label>Nível do leitor <select id="set-level">
+          <option value="iniciante">Iniciante</option>
+          <option value="intermediario">Intermediário</option>
+          <option value="avancado">Avançado</option>
+        </select></label>
+
+        <h3>Nuvem</h3>
+        <p class="muted">Abra PDFs direto do Google Drive ou Dropbox e tenha as anotações salvas no mesmo arquivo. Cada serviço exige uma credencial gratuita criada por você (veja o passo a passo no README). Pastas sincronizadas (OneDrive, Google Drive para desktop, iCloud, Dropbox) funcionam sem configuração: abra o arquivo “vinculado” pela biblioteca.</p>
+        <label>ID do cliente do Google <input type="text" id="set-gclient" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off"></label>
+        <label>Chave do app do Dropbox <input type="text" id="set-dbxkey" placeholder="App key" autocomplete="off"></label>
+
+        <h3>Dados</h3>
+        <p class="muted" id="storage-info">—</p>
+        <div class="btn-row">
+          <button type="button" class="btn ghost small" id="btn-backup"><svg class="icon"><use href="#i-download"/></svg> Backup (anotações e vocabulário)</button>
+          <button type="button" class="btn ghost small" id="btn-restore"><svg class="icon"><use href="#i-export"/></svg> Restaurar backup</button>
+          <button type="button" class="btn ghost small" id="btn-clear-cache">Limpar cache de traduções</button>
+          <input type="file" id="restore-input" accept="application/json,.json" hidden>
+        </div>
+      </div>
+      <footer><button class="btn primary" value="ok">Salvar</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="note-dialog" class="dialog">
+    <form method="dialog" class="dialog-form">
+      <header><h2>Anotação</h2><button class="btn icon ghost" value="cancel" formnovalidate title="Fechar"><svg class="icon"><use href="#i-close"/></svg></button></header>
+      <div class="dialog-body">
+        <blockquote id="note-excerpt" class="excerpt"></blockquote>
+        <textarea id="note-text" rows="5" placeholder="Escreva sua anotação…"></textarea>
+      </div>
+      <footer><button class="btn ghost" value="cancel" formnovalidate>Cancelar</button><button class="btn primary" value="ok">Salvar</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="review-dialog" class="dialog">
+    <form method="dialog" class="dialog-form">
+      <header><h2>Revisão de vocabulário</h2><button class="btn icon ghost" value="cancel" formnovalidate title="Fechar"><svg class="icon"><use href="#i-close"/></svg></button></header>
+      <div class="dialog-body" id="review-body"></div>
+      <footer class="review-footer">
+        <span class="muted" id="review-progress"></span>
+        <button type="button" class="btn ghost" id="review-flip">Virar</button>
+        <button type="button" class="btn primary" id="review-next">Próxima</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="cloud-dialog" class="dialog">
+    <form method="dialog" class="dialog-form" id="cloud-form">
+      <header><h2 id="cloud-title">Nuvem</h2><button class="btn icon ghost" value="cancel" formnovalidate title="Fechar"><svg class="icon"><use href="#i-close"/></svg></button></header>
+      <div class="search-form"><input type="search" id="cloud-search" placeholder="Buscar PDF pelo nome…" autocomplete="off"><span class="muted" id="cloud-status"></span></div>
+      <div class="dialog-body cloud-body"><div id="cloud-list" class="list"></div></div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="dialog small">
+    <form method="dialog" class="dialog-form">
+      <div class="dialog-body"><p id="confirm-text"></p></div>
+      <footer><button class="btn ghost" value="cancel">Cancelar</button><button class="btn danger" value="ok" id="confirm-ok">Confirmar</button></footer>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

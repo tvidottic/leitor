@@ -1,0 +1,18 @@
+# Privacidade: nenhum livro, documento ou dado pessoal vai para o repositório.
+# Só o PDF de exemplo (gerado para testes) é publicado.
+*.pdf
+!exemplos/A\ Tale\ of\ Idioms.pdf
+*.epub
+*.json
+!manifest.webmanifest
+leitor-backup-*.json
+*.csv
+*.md.bak
+
+# Arquivos locais / temporários
+.claude/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+*.log
