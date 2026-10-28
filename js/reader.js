@@ -6,6 +6,7 @@ import { AnnotationManager, COLORS } from './annotations.js';
 import { TranslationPanel } from './panel.js';
 import { PdfSync } from './pdfsync.js';
 import { InkTool } from './ink.js';
+import { CustomSelection } from './selection.js';
 import { translate } from './translate.js';
 import { saveVocab, listVocab, removeVocab, updateVocab, vocabToCsv } from './vocab.js';
 import { settings, saveSettings } from './db.js';
@@ -22,6 +23,11 @@ export class Reader {
     this.panel = new TranslationPanel(this);
     this.sync = new PdfSync(this);
     this.ink = new InkTool(this.viewer, this.ann);
+    this.customSel = new CustomSelection(this.container);
+    this.viewer.selectionText = () => this.getSelectedText();
+    this.customSel.addEventListener('start', () => this.clearSelectionUi());
+    this.customSel.addEventListener('end', () => this.onSelectionChange());
+    this.customSel.addEventListener('clear', () => this.clearSelectionUi());
     this.book = null;
     this.lastColor = 'yellow';
     this.tapMode = false;
@@ -66,6 +72,7 @@ export class Reader {
     this.tapMode = !!settings().tapWord;
     this.applyTapMode();
     this.applyNight(settings().night);
+    this.applySelectionMode();
     const s = settings();
     const sidebarOpen = s.sidebarOpen ?? (window.innerWidth > 1100);
     this.sidebar.hidden = !sidebarOpen;
@@ -136,6 +143,18 @@ export class Reader {
 
   layoutChanged() { this.viewer.onResize(); }
 
+  /** Seleção própria do app (sem menus do navegador): automática no toque, ou conforme a configuração. */
+  applySelectionMode() {
+    const mode = settings().customSel || 'auto';
+    const on = mode === 'on' || (mode === 'auto' && isCoarsePointer());
+    this.customSel.setEnabled(on);
+  }
+  /** Seleção atual: a própria do app quando ativa, senão a nativa do navegador. */
+  currentSelection() {
+    if (this.customSel?.enabled && this.customSel.range) return this.customSel.shim();
+    return window.getSelection();
+  }
+
   /** Recarrega o documento a partir de novos bytes (após gravar anotações), mantendo a posição. */
   async reloadFromBytes(bytes) {
     const v = this.viewer;
@@ -192,11 +211,12 @@ export class Reader {
     $('#btn-bookmark').addEventListener('click', () => this.toggleBookmark());
     $('#btn-search').addEventListener('click', () => { this.showSidebar('search'); $('#search-input').focus(); });
     $('#btn-panel').addEventListener('click', () => {
-      const sel = window.getSelection();
+      const sel = this.currentSelection();
       if (sel && !sel.isCollapsed && this.selectionInViewer(sel)) this.translateSelection('quick');
       else this.panel.toggle();
     });
     $('#btn-more').addEventListener('click', (e) => { e.stopPropagation(); this.toggleMoreMenu(); });
+    $('#btn-fullscreen').addEventListener('click', () => this.toggleFullscreen());
     $('#save-status').addEventListener('click', () => { if (this.sync.status === 'needs-permission') this.sync.resolvePermission(); else if (this.sync.status === 'error') { this.ann.dirty = true; this.sync.run({ force: true }); } });
   }
 
@@ -340,7 +360,7 @@ export class Reader {
     if (open) {
       this.updateMoreMenu();
       const r = $('#btn-more').getBoundingClientRect();
-      menu.style.top = `${r.bottom + 6}px`;
+      menu.style.top = `${Math.max(8, Math.min(r.bottom + 6, innerHeight - menu.offsetHeight - 8))}px`;
       menu.style.left = `${Math.max(8, Math.min(r.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
     }
   }
@@ -354,7 +374,12 @@ export class Reader {
     $('[data-more="autopopup"]', menu).classList.toggle('on', !!settings().autoPopup);
     $('[data-more="night"]', menu).classList.toggle('on', !!settings().night);
   }
-  toggleFullscreen() { if (document.fullscreenElement) document.exitFullscreen(); else (this.el.requestFullscreen || document.documentElement.requestFullscreen)?.call(this.el).catch?.(() => toast('Tela cheia não disponível neste navegador.')); }
+  toggleFullscreen() {
+    const fs = this.el.requestFullscreen || this.el.webkitRequestFullscreen;
+    if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    if (!fs) { this.toggleUi(); return; } // iPhone/iPad: sem API de tela cheia, esconde a barra
+    try { const p = fs.call(this.el); p?.catch?.(() => this.toggleUi()); } catch { this.toggleUi(); }
+  }
   async downloadPdf() {
     toast('Gravando anotações no PDF…', 4000);
     await this.sync.flush();
@@ -392,7 +417,7 @@ export class Reader {
     this.ink.setActive(on);
     $('#btn-ink').classList.toggle('active', on);
     $('#ink-bar').hidden = !on;
-    if (on) { this.clearSelectionUi(); window.getSelection()?.removeAllRanges(); }
+    if (on) { this.clearSelectionUi(); this.currentSelection()?.removeAllRanges(); }
     this.layoutChanged();
   }
 
@@ -560,7 +585,7 @@ export class Reader {
   }
 
   async saveAiAsNote(cur, text) {
-    const sel = window.getSelection();
+    const sel = this.currentSelection();
     let ann = null;
     if (cur.annId) ann = this.ann.get(cur.annId);
     if (!ann && sel && !sel.isCollapsed && this.selectionInViewer(sel)) { const created = await this.ann.addFromSelection(sel, { type: 'highlight', color: this.lastColor }); ann = created[0]; }
@@ -716,19 +741,19 @@ export class Reader {
     return this.container.contains(n.nodeType === 1 ? n : n.parentNode);
   }
   getSelectedText() {
-    const sel = window.getSelection();
+    const sel = this.currentSelection();
     if (!sel || sel.isCollapsed || !this.selectionInViewer(sel)) return '';
     return normalizeText(sel.toString());
   }
   selectionPage() {
-    const sel = window.getSelection();
+    const sel = this.currentSelection();
     if (!sel?.rangeCount) return this.viewer.currentPage;
     const n = sel.getRangeAt(0).startContainer;
     const div = (n.nodeType === 1 ? n : n.parentElement)?.closest('.page');
     return div ? parseInt(div.dataset.page, 10) : this.viewer.currentPage;
   }
   onSelectionChange() {
-    const sel = window.getSelection();
+    const sel = this.currentSelection();
     const text = this.getSelectedText();
     if (!text) { this.hideSelToolbar(); this.hideWordPopup(); return; }
     if (text.length > 20000) return;
@@ -760,7 +785,7 @@ export class Reader {
   hideWordPopup() { this.wordPopup.hidden = true; this.popupAbort?.abort(); }
   clearSelectionUi() { this.hideSelToolbar(); this.hideWordPopup(); this.annMenu.hidden = true; }
   repositionSelectionUi() {
-    const sel = window.getSelection();
+    const sel = this.currentSelection();
     if (!this.selToolbar.hidden || !this.wordPopup.hidden) {
       if (!sel || sel.isCollapsed || !this.selectionInViewer(sel)) { this.hideSelToolbar(); this.hideWordPopup(); return; }
       this.showSelToolbar(sel);
@@ -809,7 +834,7 @@ export class Reader {
       this.wordPopup.style.bottom = `calc(${above}px + env(safe-area-inset-bottom))`;
       return;
     }
-    const sel = window.getSelection();
+    const sel = this.currentSelection();
     if (!sel?.rangeCount) return;
     const range = sel.getRangeAt(0);
     const rects = range.getClientRects();
@@ -823,7 +848,7 @@ export class Reader {
   }
 
   async highlightSelection(type, color) {
-    const sel = window.getSelection();
+    const sel = this.currentSelection();
     if (!sel || sel.isCollapsed) return;
     this.lastColor = color || this.lastColor;
     const created = await this.ann.addFromSelection(sel, { type, color: this.lastColor });
@@ -861,7 +886,7 @@ export class Reader {
     const pin = e.target.closest('.note-pin');
     if (pin) { const a = this.ann.get(pin.dataset.id); if (a) this.editNote(a); return; }
     if (e.target.closest('.pdf-link')) return;
-    const sel = window.getSelection();
+    const sel = this.currentSelection();
     if (sel && !sel.isCollapsed) return;
     const pageDiv = e.target.closest('.page');
     if (!pageDiv) return;
@@ -890,6 +915,7 @@ export class Reader {
     this.annMenu.style.top = `${clamp(cy - h - 14, 8, window.innerHeight - h - 8)}px`;
   }
   selectWordAt(x, y) {
+    if (this.customSel.enabled) { this.customSel.selectWordAt(x, y); return; }
     let node, offset;
     if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(x, y); if (!p) return; node = p.offsetNode; offset = p.offset; }
     else if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(x, y); if (!r) return; node = r.startContainer; offset = r.startOffset; }
@@ -902,7 +928,7 @@ export class Reader {
     if (e <= s) return;
     const range = document.createRange();
     range.setStart(node, s); range.setEnd(node, e);
-    const sel = window.getSelection();
+    const sel = this.currentSelection();
     sel.removeAllRanges(); sel.addRange(range);
     const text = normalizeText(range.toString());
     if (!text) return;
@@ -958,7 +984,7 @@ export class Reader {
           if (this.ink.active) this.setInk(false);
           else if (!$('#more-menu').hidden) this.toggleMoreMenu(false);
           else if (!this.panel.el.hidden) this.panel.hide();
-          else if (window.getSelection()?.rangeCount) window.getSelection().removeAllRanges();
+          else if (this.currentSelection()?.rangeCount) this.currentSelection().removeAllRanges();
           this.clearSelectionUi();
           break;
         default: {

@@ -125,6 +125,7 @@
         <button class="btn icon toggle" id="btn-bookmark" title="Marcar página (B)"><svg class="icon"><use href="#i-bookmark"/></svg></button>
         <button class="btn icon" id="btn-search" title="Buscar no documento (Ctrl+F)"><svg class="icon"><use href="#i-search"/></svg></button>
         <button class="btn icon" id="btn-panel" title="Painel de tradução (T)"><svg class="icon"><use href="#i-translate"/></svg></button>
+        <button class="btn icon" id="btn-fullscreen" title="Tela cheia (F)"><svg class="icon"><use href="#i-fullscreen"/></svg></button>
         <button class="btn icon" id="btn-more" title="Mais opções"><svg class="icon"><use href="#i-more"/></svg></button>
       </div>
     </header>
@@ -237,7 +238,6 @@
       <button data-more="tts"><svg class="icon"><use href="#i-speaker"/></svg> Ler em voz alta</button>
       <div class="menu-section">Tradução</div>
       <button data-more="autopopup"><svg class="icon"><use href="#i-translate"/></svg> Tradução automática ao selecionar <span class="menu-check"></span></button>
-      <button data-more="fullscreen"><svg class="icon"><use href="#i-fullscreen"/></svg> Tela cheia <span class="muted">F</span></button>
       <div class="menu-section">Arquivo</div>
       <button data-more="download"><svg class="icon"><use href="#i-download"/></svg> Baixar PDF com anotações</button>
       <button data-more="link-file" id="more-link-file"><svg class="icon"><use href="#i-link"/></svg> Salvar como… (vincular a um arquivo)</button>
@@ -292,6 +292,11 @@
         <label class="check"><input type="checkbox" id="set-autopopup"> Mostrar tradução rápida ao selecionar um trecho</label>
         <label class="check"><input type="checkbox" id="set-tapword"> Toque em uma palavra traduz (modo toque)</label>
         <label class="check"><input type="checkbox" id="set-dict"> Buscar dicionário em inglês (definições, fonética, áudio)</label>
+        <label>Seleção de texto <select id="set-customsel">
+          <option value="auto">Própria do app no toque, nativa no mouse</option>
+          <option value="on">Sempre própria do app (sem menus do navegador)</option>
+          <option value="off">Sempre a do navegador</option>
+        </select></label>
 
         <h3>Aparência e leitura</h3>
         <label>Tema <select id="set-theme"><option value="system">Automático</option><option value="light">Claro</option><option value="dark">Escuro</option><option value="sepia">Sépia</option></select></label>

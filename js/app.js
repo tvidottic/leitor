@@ -75,7 +75,7 @@ class App {
       if (dlg.returnValue !== 'ok') return;
       const patch = {
         tl: tl.value, sl: sl.value,
-        autoPopup: $('#set-autopopup').checked, tapWord: $('#set-tapword').checked, dict: $('#set-dict').checked,
+        autoPopup: $('#set-autopopup').checked, tapWord: $('#set-tapword').checked, dict: $('#set-dict').checked, customSel: $('#set-customsel').value,
         theme: $('#set-theme').value, night: $('#set-night').checked, tapZones: $('#set-tapzones').checked,
         author: $('#set-author').value.trim(), wakeLock: $('#set-wakelock').checked,
         apiKey: $('#set-apikey').value.trim(), model: $('#set-model').value, effort: $('#set-effort').value, level: $('#set-level').value,
@@ -87,6 +87,7 @@ class App {
         this.reader.applyNight(patch.night);
         this.reader.tapMode = patch.tapWord; this.reader.applyTapMode();
         this.reader.panel.tlSelect.value = patch.tl;
+        this.reader.applySelectionMode();
       }
       toast('Configurações salvas.');
     });
@@ -99,7 +100,7 @@ class App {
   async openSettings() {
     const s = settings();
     $('#set-tl').value = s.tl; $('#set-sl').value = s.sl;
-    $('#set-autopopup').checked = s.autoPopup; $('#set-tapword').checked = s.tapWord; $('#set-dict').checked = s.dict;
+    $('#set-autopopup').checked = s.autoPopup; $('#set-tapword').checked = s.tapWord; $('#set-dict').checked = s.dict; $('#set-customsel').value = s.customSel || 'auto';
     $('#set-theme').value = s.theme; $('#set-night').checked = s.night; $('#set-tapzones').checked = s.tapZones !== false;
     $('#set-author').value = s.author || ''; $('#set-wakelock').checked = s.wakeLock !== false;
     $('#set-apikey').value = s.apiKey || ''; $('#set-model').value = s.model; $('#set-effort').value = s.effort; $('#set-level').value = s.level;

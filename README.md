@@ -121,7 +121,8 @@ Configurações → Nuvem. O login usa OAuth PKCE, sem segredo do app.
 ## No celular e no tablet
 
 - Toque no centro da página para esconder ou mostrar a barra; um indicador discreto mostra a página atual.
-- Ao selecionar texto, as opções do Leitor só aparecem depois que você solta o dedo, em uma barra na base da tela, longe do menu do próprio navegador. A tradução automática pode ser desligada no menu “⋯”.
+- A seleção de texto é do próprio Leitor, não a do navegador: toque e segure uma palavra, arraste para estender (palavras inteiras) e ajuste pelas alças. Por isso não aparecem os menus de copiar/pesquisar do navegador. As opções surgem numa barra na base da tela ao soltar o dedo. No computador, a seleção nativa continua (dá para forçar a própria do app em Configurações → Seleção de texto, útil no Edge). A tradução automática pode ser desligada no menu “⋯”.
+- Tela cheia fica na barra principal; no iPhone e iPad, que não têm tela cheia no navegador, o botão esconde a barra.
 - Modo página a página: deslize para o lado, toque nas bordas ou use o duplo toque para ampliar. O zoom e o enquadramento se mantêm ao virar a página.
 - A tela fica ligada durante a leitura (pode desativar nas configurações).
 

@@ -518,3 +518,23 @@ polyline.ink.flash { animation: inkflash 1.2s ease-out; }
 .page-chip.show { opacity: 1; }
 .toolbar { padding-top: env(safe-area-inset-top); }
 .panel { padding-bottom: env(safe-area-inset-bottom); }
+
+/* seleção própria do app */
+.custom-sel .textLayer, .custom-sel .textLayer * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.custom-sel .textLayer span { cursor: text; }
+.sel-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 45; }
+.sel-rect { position: fixed; background: rgba(59,108,246,.30); border-radius: 2px; }
+.night .sel-rect, :root[data-theme="dark"] .sel-rect { background: rgba(107,147,255,.38); }
+.sel-handle { position: fixed; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); transform: translate(-50%, -3px); }
+.sel-handle::before { content: ""; position: absolute; left: 50%; top: -14px; width: 2px; height: 14px; background: var(--accent); transform: translateX(-50%); }
+@media (pointer: fine) { .sel-handle { width: 10px; height: 10px; } }
+/* menus e diálogos sempre cabendo na tela (paisagem no celular) */
+.ctx-menu { max-height: calc(100dvh - 24px); overflow-y: auto; }
+.more-menu { max-height: calc(100dvh - 60px); }
+/* barra compacta no celular */
+@media (max-width: 640px) {
+  .toolbar .btn.icon { width: 36px; min-height: 36px; }
+  .toolbar .tb-group { gap: 0; }
+  .save-status { font-size: 0; padding: 4px 5px; gap: 0; }
+  .page-ctrl input { width: 46px; }
+}

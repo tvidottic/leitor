@@ -63,6 +63,7 @@ export const DEFAULT_SETTINGS = {
   autoPopup: true,     // popup rápido ao selecionar
   tapWord: false,      // toque em palavra traduz
   dict: true,          // dicionário inglês
+  customSel: 'auto',   // seleção própria do app: auto (toque) | on | off
   apiKey: '',
   model: 'claude-opus-5-5',
   effort: 'low',

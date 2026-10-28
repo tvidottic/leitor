@@ -658,7 +658,7 @@ export class PdfViewer extends EventTarget {
       const t = e.changedTouches[0];
       const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y, dt = Date.now() - swipe.t;
       const s = swipe; swipe = null;
-      if (this.pageMode === 'paged' && dt < 1200 && Math.abs(dx) > 60 && Math.abs(dy) < Math.abs(dx) * 0.6 && !window.getSelection()?.toString()) {
+      if (this.pageMode === 'paged' && dt < 1200 && Math.abs(dx) > 60 && Math.abs(dy) < Math.abs(dx) * 0.6 && !(this.selectionText ? this.selectionText() : window.getSelection()?.toString())) {
         const atRight = c.scrollLeft + c.clientWidth >= c.scrollWidth - 2, atLeft = c.scrollLeft <= 2;
         const moved = Math.abs(c.scrollLeft - s.left) > 4;
         if (dx < 0 && atRight && !moved) { this.nextPage(); return; }
@@ -668,7 +668,7 @@ export class PdfViewer extends EventTarget {
         const now = Date.now();
         if (now - lastTap < 320 && Math.abs(t.clientX - lastTapX) < 30 && Math.abs(t.clientY - lastTapY) < 30) {
           lastTap = 0;
-          if (this.pdf && !window.getSelection()?.toString()) {
+          if (this.pdf && !(this.selectionText ? this.selectionText() : window.getSelection()?.toString())) {
             const fit = this.pageMode === 'paged' ? this.fitScale() : null;
             if (fit && this.scale > fit * 1.08) this.setZoom('page-fit');
             else if (!fit && this.zoomMode !== 'auto') this.setZoom('auto');
