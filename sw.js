@@ -1,5 +1,5 @@
 // Service worker: deixa o aplicativo disponível offline (os livros ficam no IndexedDB).
-const VERSION = 'leitor-v5';
+const VERSION = 'leitor-v6';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/reader.js', './js/viewer.js', './js/library.js', './js/annotations.js', './js/translate.js',

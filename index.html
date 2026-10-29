@@ -144,7 +144,8 @@
       <button class="btn small ghost width-btn" data-ink-width="grossa" title="Grossa"><span class="w w3"></span></button>
       <span class="sep"></span>
       <button class="btn small ghost toggle" id="btn-eraser" title="Borracha (toque no traço para apagar)"><svg class="icon"><use href="#i-eraser"/></svg> Borracha</button>
-      <button class="btn small ghost toggle" id="btn-pen-only" title="Ignorar toques de dedo (somente caneta)"><svg class="icon"><use href="#i-pen"/></svg> Só caneta</button>
+      <button class="btn small ghost toggle" id="btn-pen-only" title="Só a caneta escreve; o dedo rola a página (liga sozinho ao detectar uma caneta)"><svg class="icon"><use href="#i-pen"/></svg> Só caneta</button>
+      <button class="btn small ghost" id="btn-undo" title="Desfazer (Ctrl+Z)"><svg class="icon"><use href="#i-history"/></svg> Desfazer</button>
       <span class="grow"></span>
       <button class="btn small ghost" id="btn-ink-done"><svg class="icon"><use href="#i-check"/></svg> Concluir</button>
     </div>
@@ -224,6 +225,13 @@
       </aside>
     </div>
 
+    <!-- Barra de progresso -->
+    <div class="scrubber" id="scrubber">
+      <span class="scrub-label" id="scrub-label">1 / 1</span>
+      <input type="range" id="scrub" min="1" max="1" value="1" aria-label="Ir para a página">
+      <span class="scrub-left" id="scrub-left"></span>
+    </div>
+
     <!-- Menu "mais" -->
     <div id="more-menu" class="ctx-menu more-menu" hidden>
       <div class="menu-section">Modo de leitura</div>
@@ -231,6 +239,7 @@
         <button class="btn small toggle" data-more="scroll"><svg class="icon"><use href="#i-scroll"/></svg> Rolagem</button>
         <button class="btn small toggle" data-more="paged"><svg class="icon"><use href="#i-paged"/></svg> Página a página</button>
       </div>
+      <button data-more="spread"><svg class="icon"><use href="#i-paged"/></svg> Páginas duplas em paisagem <span class="menu-check"></span></button>
       <button data-more="viewlock"><svg class="icon"><use href="#i-fit"/></svg> Travar zoom e enquadramento <span class="menu-check"></span></button>
       <button data-more="crop"><svg class="icon"><use href="#i-crop"/></svg> Cortar margens <span class="menu-check"></span></button>
       <button data-more="rotate"><svg class="icon"><use href="#i-rotate"/></svg> Girar 90°</button>
@@ -238,6 +247,7 @@
       <button data-more="tts"><svg class="icon"><use href="#i-speaker"/></svg> Ler em voz alta</button>
       <div class="menu-section">Tradução</div>
       <button data-more="autopopup"><svg class="icon"><use href="#i-translate"/></svg> Tradução automática ao selecionar <span class="menu-check"></span></button>
+      <button data-more="undo"><svg class="icon"><use href="#i-history"/></svg> Desfazer última anotação <span class="muted">Ctrl+Z</span></button>
       <div class="menu-section">Arquivo</div>
       <button data-more="download"><svg class="icon"><use href="#i-download"/></svg> Baixar PDF com anotações</button>
       <button data-more="link-file" id="more-link-file"><svg class="icon"><use href="#i-link"/></svg> Salvar como… (vincular a um arquivo)</button>

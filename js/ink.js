@@ -6,18 +6,28 @@ import { INK_COLORS } from './annotations.js';
 const SVG = 'http://www.w3.org/2000/svg';
 export const INK_WIDTHS = { fina: 1.5, media: 3, grossa: 6 };
 
-export class InkTool {
+export class InkTool extends EventTarget {
   constructor(viewer, ann) {
+    super();
     this.viewer = viewer;
     this.ann = ann;
     this.active = false;
     this.color = INK_COLORS[0];
     this.width = 'media';
     this.eraser = false;
-    this.penOnly = false;
+    this.penOnlyMode = 'auto';   // 'auto' (só caneta quando uma caneta foi detectada) | 'on' | 'off'
+    this.penSeen = false;
+    this.activePen = false;
     this.stroke = null;
     viewer.addEventListener('pagerendered', (e) => { if (this.active) this.attach(this.viewer.getPage(e.detail.page)); });
+    viewer.container.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'pen' && !this.penSeen) { this.penSeen = true; this.applyTouchAction(); this.dispatchEvent?.(new Event('penseen')); }
+    }, true);
   }
+
+  get penOnly() { return this.penOnlyMode === 'on' || (this.penOnlyMode === 'auto' && this.penSeen); }
+  set penOnly(v) { this.penOnlyMode = v ? 'on' : 'off'; this.applyTouchAction(); }
+  applyTouchAction() { this.viewer.container.classList.toggle('pen-only', this.penOnly); }
 
   setActive(on) {
     this.active = !!on;
@@ -38,6 +48,12 @@ export class InkTool {
     svg.setAttribute('class', 'ink-live');
     p.inkLayer.append(svg);
     p.inkLayer.addEventListener('pointerdown', (e) => this.onDown(e, p, svg));
+    // com "só caneta": o dedo rola a página; a caneta (stylus) escreve sem rolar
+    p.inkLayer.addEventListener('touchstart', (e) => {
+      const stylus = this.activePen || Array.from(e.touches).some(t => t.touchType === 'stylus');
+      if (!this.penOnly || stylus) e.preventDefault();
+    }, { passive: false });
+    p.inkLayer.addEventListener('touchmove', (e) => { if (this.stroke) e.preventDefault(); }, { passive: false });
     p.inkLayer.addEventListener('pointermove', (e) => this.onMove(e, p));
     p.inkLayer.addEventListener('pointerup', (e) => this.onUp(e, p));
     p.inkLayer.addEventListener('pointercancel', (e) => this.onUp(e, p, true));
@@ -45,10 +61,11 @@ export class InkTool {
 
   onDown(e, p, svg) {
     if (!this.active || e.button > 0) return;
+    this.activePen = e.pointerType === 'pen';
     if (this.penOnly && e.pointerType === 'touch') return;
     e.preventDefault();
     if (this.eraser) { this.eraseAt(e, p); return; }
-    p.inkLayer.setPointerCapture(e.pointerId);
+    try { p.inkLayer.setPointerCapture(e.pointerId); } catch { /* alguns navegadores/eventos sintéticos */ }
     const r = p.div.getBoundingClientRect();
     const pl = document.createElementNS(SVG, 'polyline');
     pl.setAttribute('class', `ink ${this.color}`);

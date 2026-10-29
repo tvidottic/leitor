@@ -28,6 +28,7 @@ export class PdfViewer extends EventTarget {
     this.cropMargins = false;   // corta as margens brancas
     this.pageMode = 'scroll';   // 'scroll' | 'paged'
     this.viewLock = true;       // paginado: mantém zoom e enquadramento ao virar a página
+    this.spread = 'auto';       // paginado: 'auto' = duas páginas lado a lado quando a tela é larga | 'off'
     this.currentPage = 1;
     this.textCache = new Map();
     this.rendering = 0;
@@ -158,20 +159,52 @@ export class PdfViewer extends EventTarget {
     const gutter = this.container.offsetWidth - this.container.clientWidth > 0 ? 0 : 18;
     const cw = this.container.clientWidth - 28 - gutter;
     const ch = this.container.clientHeight - 2 * PAGE_GAP;
-    const ref = (this.pageMode === 'paged' && this.pages[this.currentPage - 1]) || this.pages[0];
-    if (!ref) return;
-    const d = this.dimsOf(ref, 1);
-    if (this.zoomMode === 'auto') this.scale = Math.min(cw, MAX_AUTO_WIDTH) / d.cw;
+    if (!this.pages.length) return;
+    const d = this.pageMode === 'paged' ? this.visibleDims() : this.dimsOf(this.pages[0], 1);
+    if (this.zoomMode === 'auto') this.scale = Math.min(cw, this.pageMode === 'paged' ? Infinity : MAX_AUTO_WIDTH) / d.cw;
     else if (this.zoomMode === 'page-fit') this.scale = Math.min(cw / d.cw, ch / d.ch);
     else this.scale = parseFloat(this.zoomMode) || 1;
     this.scale = clamp(this.scale, 0.2, 6);
     this.lastWidth = this.container.clientWidth;
   }
 
+  /** Páginas duplas ativas? (modo paginado, tela larga em paisagem) */
+  spreadActive() {
+    const c = this.container;
+    return this.pageMode === 'paged' && this.spread !== 'off' && this.numPages > 1 && c.clientWidth > c.clientHeight && c.clientWidth >= 860;
+  }
+  /** Índices das páginas exibidas no modo paginado (1 ou 2), normalizando a página atual para a esquerda da dupla. */
+  visibleIndices() {
+    if (this.pageMode !== 'paged') return [this.currentPage - 1];
+    if (!this.spreadActive()) return [this.currentPage - 1];
+    const left = this.currentPage % 2 ? this.currentPage : this.currentPage - 1;
+    const idx = [left - 1, left].filter(i => i >= 0 && i < this.numPages);
+    return idx;
+  }
+  /** Dimensões (escala 1) do conjunto visível: largura somada + espaço, altura máxima. */
+  visibleDims() {
+    const idx = this.visibleIndices();
+    let cw = 0, ch = 0;
+    for (const i of idx) { const d = this.dimsOf(this.pages[i], 1); cw += d.cw; ch = Math.max(ch, d.ch); }
+    return { cw: cw + (idx.length > 1 ? 10 : 0), ch };
+  }
+  applyCurrentClasses() {
+    const idx = this.visibleIndices();
+    const left = idx[0];
+    this.currentPage = left + 1;
+    for (const p of this.pages) {
+      const i = p.num - 1;
+      const on = idx.includes(i);
+      p.div.classList.toggle('current', on);
+      p.div.classList.toggle('spread-left', on && idx.length > 1 && i === idx[0]);
+      p.div.classList.toggle('spread-right', on && idx.length > 1 && i === idx[1]);
+    }
+  }
+
   layout() {
     for (const p of this.pages) this.sizePage(p);
     if (this.pageMode === 'paged') {
-      for (const p of this.pages) p.div.classList.toggle('current', p.num === this.currentPage);
+      this.applyCurrentClasses();
       this.viewerEl.style.minWidth = `${this.container.clientWidth}px`;
       this.viewerEl.style.minHeight = `${this.container.clientHeight}px`;
     } else {
@@ -182,9 +215,8 @@ export class PdfViewer extends EventTarget {
   }
   /** Escala que ajusta a página atual inteira à tela. */
   fitScale() {
-    const p = this.pages[this.currentPage - 1] || this.pages[0];
-    if (!p) return 1;
-    const d = this.dimsOf(p, 1);
+    if (!this.pages.length) return 1;
+    const d = this.pageMode === 'paged' ? this.visibleDims() : this.dimsOf(this.pages[0], 1);
     const gutter = this.container.offsetWidth - this.container.clientWidth > 0 ? 0 : 18;
     return Math.min((this.container.clientWidth - 28 - gutter) / d.cw, (this.container.clientHeight - 2 * PAGE_GAP) / d.ch);
   }
@@ -219,7 +251,6 @@ export class PdfViewer extends EventTarget {
   }
 
   setZoom(mode, anchor) {
-    if (this.pageMode === 'paged' && mode === 'auto') mode = 'page-fit';
     const pos = anchor || this.anchorAt(this.container.clientWidth / 2, this.container.clientHeight / 2);
     this.zoomMode = mode;
     this.computeScale();
@@ -306,14 +337,17 @@ export class PdfViewer extends EventTarget {
     const i = page - 1;
     if (!this.pages[i]) return;
     if (this.pageMode === 'paged') {
-      const changed = page !== this.currentPage;
+      const before = this.currentPage;
+      this.currentPage = page;
+      this.applyCurrentClasses();
+      page = this.currentPage;
+      const changed = page !== before;
       if (changed) {
-        this.currentPage = page;
-        for (const p of this.pages) p.div.classList.toggle('current', p.num === page);
-        if (this.zoomMode === 'page-fit') { this.computeScale(); for (const p of this.pages) this.sizePage(p); }
+        if (this.zoomMode === 'page-fit' || this.zoomMode === 'auto') { this.computeScale(); for (const p of this.pages) this.sizePage(p); }
         this.measure();
       }
-      this.container.scrollTop = this.tops[i] + yRatio * this.pages[i].height;
+      const li = page - 1;
+      this.container.scrollTop = this.tops[li] + yRatio * this.pages[li].height;
       if (changed) this.dispatchEvent(new CustomEvent('pagechange', { detail: { page, numPages: this.numPages } }));
       this.update();
       return;
@@ -326,7 +360,9 @@ export class PdfViewer extends EventTarget {
   prevPage() { this.turnPage(-1); }
   /** Vira a página; no modo paginado com trava, mantém zoom e enquadramento. */
   turnPage(delta) {
-    const target = this.currentPage + delta;
+    if (this.spreadActive()) delta *= 2;
+    const target = clamp(this.currentPage + delta, 1, this.numPages);
+    if (target === this.currentPage) return;
     if (target < 1 || target > this.numPages) return;
     if (this.pageMode !== 'paged') { this.goTo(target); return; }
     const c = this.container;
@@ -339,11 +375,12 @@ export class PdfViewer extends EventTarget {
   update() {
     if (!this.pdf || !this.pages.length) return;
     if (this.pageMode === 'paged') {
-      const ci = this.currentPage - 1;
-      const wanted = [ci, ci + 1, ci - 1].filter(i => i >= 0 && i < this.pages.length);
+      const vis = this.visibleIndices();
+      const ci = vis[0], last = vis[vis.length - 1];
+      const wanted = [...vis, last + 1, ci - 1, last + 2, ci - 2].filter((i, k, arr) => i >= 0 && i < this.pages.length && arr.indexOf(i) === k);
       this.renderQueue = wanted.map(i => this.pages[i]).filter(p => !p.rendered && !p.rendering);
       this.pump();
-      for (let i = 0; i < this.pages.length; i++) if (Math.abs(i - ci) > 2) { const p = this.pages[i]; if (p.rendered || p.rendering) this.cleanupPage(p); }
+      for (let i = 0; i < this.pages.length; i++) if (i < ci - 3 || i > last + 3) { const p = this.pages[i]; if (p.rendered || p.rendering) this.cleanupPage(p); }
       this.dispatchEvent(new CustomEvent('scroll', { detail: { first: this.currentPage, last: this.currentPage } }));
       return;
     }

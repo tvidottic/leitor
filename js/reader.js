@@ -51,6 +51,7 @@ export class Reader {
     this._bindKeyboard();
     this._bindViewerEvents();
     this._bindImmersive();
+    this._bindScrubber();
     this.ann.addEventListener('change', () => { this.renderAnnotList(); if (this.syncReady && this.ann.dirty) this.sync.changed(); });
     this.sync.addEventListener('status', (e) => this.renderSaveStatus(e.detail));
   }
@@ -88,6 +89,8 @@ export class Reader {
       }
       const data = await blob.arrayBuffer();
       this.viewer.viewLock = book.viewLock !== false;
+      this.viewer.spread = book.spread || 'auto';
+      this.ann.undoStack = [];
       await this.viewer.load(data, { page: book.lastPage || 1, yRatio: book.yRatio || 0, zoomMode: book.zoomMode || 'auto', rotation: book.rotation || 0, cropMargins: !!book.cropMargins, pageMode: book.pageMode || 'scroll' });
       this.requestWakeLock();
       $('#loading').hidden = true;
@@ -95,6 +98,7 @@ export class Reader {
       $('#page-count').textContent = this.viewer.numPages;
       $('#page-input').max = this.viewer.numPages;
       $('#page-input').value = this.viewer.currentPage;
+      this.initScrubber();
       this.updateZoomSelect();
       this.buildThumbs();
       this.buildOutline();
@@ -170,7 +174,7 @@ export class Reader {
   async savePositionNow() {
     if (!this.book || !this.viewer.pdf) return;
     const pos = this.viewer.getPosition();
-    Object.assign(this.book, { lastPage: pos.page, yRatio: pos.yRatio, zoomMode: this.viewer.zoomMode, rotation: this.viewer.rotation, cropMargins: this.viewer.cropMargins, pageMode: this.viewer.pageMode, viewLock: this.viewer.viewLock, lastOpenedAt: Date.now() });
+    Object.assign(this.book, { lastPage: pos.page, yRatio: pos.yRatio, zoomMode: this.viewer.zoomMode, rotation: this.viewer.rotation, cropMargins: this.viewer.cropMargins, pageMode: this.viewer.pageMode, viewLock: this.viewer.viewLock, spread: this.viewer.spread, lastOpenedAt: Date.now() });
     await this.app.library.updateBook(this.book);
   }
 
@@ -254,6 +258,7 @@ export class Reader {
       this.updateBookmarkButton();
       this.savePosition();
       this.showPageChip(e.detail.page, e.detail.numPages);
+      this.updateScrubber(e.detail.page);
     });
     this.viewer.addEventListener('scalechange', () => { this.updateZoomSelect(); this.savePosition(); this.repositionSelectionUi(); });
     this.viewer.addEventListener('scroll', () => { this.savePosition(); this.repositionSelectionUi(); });
@@ -264,6 +269,34 @@ export class Reader {
       const t = await this.viewer.resolveDest(dest);
       if (t) this.jumpTo(t.page, t.yRatio);
     });
+  }
+
+  // ---- barra de progresso (controle deslizante de páginas + tempo restante)
+  initScrubber() {
+    const s = $('#scrub');
+    s.max = this.viewer.numPages; s.min = 1; s.value = this.viewer.currentPage;
+    this.lastScrubPage = this.viewer.currentPage;
+    this.updateScrubber(this.viewer.currentPage);
+  }
+  updateScrubber(page) {
+    const total = this.viewer.numPages;
+    const s = $('#scrub');
+    if (!this.scrubbing) s.value = page;
+    if (page > (this.lastScrubPage || 0) && page - this.lastScrubPage <= 2) this.book.pagesRead = (this.book.pagesRead || 0) + (page - this.lastScrubPage);
+    this.lastScrubPage = page;
+    $('#scrub-label').textContent = `${page} / ${total}`;
+    const pct = total > 1 ? Math.round((page - 1) / (total - 1) * 100) : 100;
+    const secPer = (this.book.pagesRead || 0) >= 3 ? (this.book.readingSeconds || 0) / this.book.pagesRead : 75;
+    const left = Math.max(0, total - page) * Math.min(Math.max(secPer, 15), 900);
+    $('#scrub-left').textContent = page >= total ? 'Fim' : `${pct}% · ≈ ${fmtLeft(left)} restantes`;
+    s.style.setProperty('--pct', `${pct}%`);
+  }
+  _bindScrubber() {
+    const s = $('#scrub');
+    s.addEventListener('input', () => { this.scrubbing = true; $('#scrub-label').textContent = `${s.value} / ${this.viewer.numPages}`; });
+    const commit = () => { if (!this.scrubbing) return; this.scrubbing = false; const p = parseInt(s.value, 10); if (p !== this.viewer.currentPage) this.jumpTo(p); };
+    s.addEventListener('change', commit);
+    s.addEventListener('pointerup', commit);
   }
 
   showPageChip(page, total) {
@@ -335,10 +368,12 @@ export class Reader {
       const btn = e.target.closest('[data-more]');
       if (!btn) return;
       const act = btn.dataset.more;
-      if (!['crop', 'night', 'scroll', 'paged', 'viewlock', 'autopopup'].includes(act)) this.toggleMoreMenu(false);
+      if (!['crop', 'night', 'scroll', 'paged', 'viewlock', 'autopopup', 'spread'].includes(act)) this.toggleMoreMenu(false);
       switch (act) {
         case 'scroll': case 'paged': this.viewer.setPageMode(act); this.updateMoreMenu(); this.savePosition(); toast(act === 'paged' ? 'Página a página: deslize ou toque nas bordas para virar; duplo toque amplia.' : 'Rolagem contínua.'); break;
         case 'viewlock': this.viewer.viewLock = !this.viewer.viewLock; this.updateMoreMenu(); this.savePosition(); break;
+        case 'spread': this.viewer.spread = this.viewer.spread === 'off' ? 'auto' : 'off'; this.viewer.setPageMode('paged'); this.updateMoreMenu(); this.savePosition(); break;
+        case 'undo': { const msg = await this.ann.undo(); toast(msg || 'Nada para desfazer.'); break; }
         case 'autopopup': { const on = !settings().autoPopup; await saveSettings({ autoPopup: on }); this.updateMoreMenu(); toast(on ? 'Tradução automática ao selecionar ativada.' : 'Tradução automática desativada: use o botão de tradução na barra de seleção.'); break; }
         case 'crop': await this.viewer.setCropMargins(!this.viewer.cropMargins); this.updateMoreMenu(); this.savePosition(); break;
         case 'rotate': this.viewer.setRotation(this.viewer.rotation + 90); this.savePosition(); break;
@@ -371,6 +406,8 @@ export class Reader {
     $('[data-more="crop"]', menu).classList.toggle('on', this.viewer.cropMargins);
     $('[data-more="viewlock"]', menu).classList.toggle('on', this.viewer.viewLock);
     $('[data-more="viewlock"]', menu).disabled = this.viewer.pageMode !== 'paged';
+    $('[data-more="spread"]', menu).classList.toggle('on', this.viewer.spread !== 'off');
+    $('[data-more="spread"]', menu).disabled = this.viewer.pageMode !== 'paged';
     $('[data-more="autopopup"]', menu).classList.toggle('on', !!settings().autoPopup);
     $('[data-more="night"]', menu).classList.toggle('on', !!settings().night);
   }
@@ -410,11 +447,15 @@ export class Reader {
       if (wb) { this.ink.width = wb.dataset.inkWidth; $$('[data-ink-width]', bar).forEach(x => x.classList.toggle('active', x === wb)); }
     });
     $('#btn-eraser').addEventListener('click', () => { this.ink.eraser = !this.ink.eraser; $('#btn-eraser').classList.toggle('active', this.ink.eraser); });
-    $('#btn-pen-only').addEventListener('click', () => { this.ink.penOnly = !this.ink.penOnly; $('#btn-pen-only').classList.toggle('active', this.ink.penOnly); });
+    $('#btn-pen-only').addEventListener('click', () => { this.ink.penOnly = !this.ink.penOnly; this.updatePenOnly(); });
+    this.ink.addEventListener('penseen', () => { this.updatePenOnly(); if (this.ink.active) toast('Caneta detectada: escreva com a caneta; o dedo rola a página.'); });
+    $('#btn-undo').addEventListener('click', async () => { const msg = await this.ann.undo(); toast(msg || 'Nada para desfazer.'); });
     $('#btn-ink-done').addEventListener('click', () => this.setInk(false));
   }
+  updatePenOnly() { $('#btn-pen-only').classList.toggle('active', this.ink.penOnly); }
   setInk(on) {
     this.ink.setActive(on);
+    this.updatePenOnly();
     $('#btn-ink').classList.toggle('active', on);
     $('#ink-bar').hidden = !on;
     if (on) { this.clearSelectionUi(); this.currentSelection()?.removeAllRanges(); }
@@ -980,6 +1021,7 @@ export class Reader {
       if (document.querySelector('dialog[open]')) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); this.showSidebar('search'); $('#search-input').focus(); $('#search-input').select(); return; }
       if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); this.historyBack(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); this.ann.undo().then(m => toast(m || 'Nada para desfazer.')); return; }
       if (typing) return;
       const v = this.viewer;
       const sel = this.getSelectedText();
@@ -1020,5 +1062,6 @@ export class Reader {
   }
 }
 
+function fmtLeft(sec) { const m = Math.round(sec / 60); if (m < 1) return 'menos de 1 min'; if (m < 60) return `${m} min`; const h = Math.floor(m / 60), r = m % 60; return r ? `${h} h ${r} min` : `${h} h`; }
 const safeName = (s) => String(s).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80);
 const stripMd = (s) => s.replace(/^#{1,6}\s*/gm, '').replace(/\*\*/g, '').replace(/^\s*[-*]\s+/gm, '• ');

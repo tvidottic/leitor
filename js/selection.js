@@ -170,7 +170,7 @@ export class CustomSelection extends EventTarget {
     if (!caret) return;
     this.pending = { x: e.clientX, y: e.clientY, caret, id: e.pointerId, type: e.pointerType };
     clearTimeout(this.timer);
-    if (e.pointerType !== 'mouse') {
+    if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') {
       this.timer = setTimeout(() => {
         if (!this.pending) return;
         const p = this.pending; this.pending = null;
@@ -190,7 +190,7 @@ export class CustomSelection extends EventTarget {
     if (!this.pending) return;
     const dx = e.clientX - this.pending.x, dy = e.clientY - this.pending.y;
     if (Math.hypot(dx, dy) > 8) {
-      if (this.pending.type === 'mouse') { const p = this.pending; this.pending = null; this.start(p.caret, false); this.capture(e); }
+      if (this.pending.type === 'mouse' || this.pending.type === 'pen') { const p = this.pending; this.pending = null; this.start(p.caret, p.type === 'pen'); this.capture(e); }
       else { this.pending = null; clearTimeout(this.timer); } // dedo moveu: é rolagem
     }
   }

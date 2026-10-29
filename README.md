@@ -125,6 +125,10 @@ Configurações → Nuvem. O login usa OAuth PKCE, sem segredo do app.
 - Tela cheia fica na barra principal; no iPhone e iPad, que não têm tela cheia no navegador, o botão esconde a barra.
 - Modo página a página: deslize para o lado, toque nas bordas ou use o duplo toque para ampliar. O zoom e o enquadramento se mantêm ao virar a página.
 - A tela fica ligada durante a leitura (pode desativar nas configurações).
+- **Tablet em paisagem:** o modo página a página mostra duas páginas lado a lado, como um livro aberto (desligável no menu “⋯”). No paginado também é possível usar o zoom “Largura”.
+- **Caneta (Apple Pencil, S Pen e similares):** seleciona texto arrastando, sem toque longo, e, na ferramenta de caneta, escreve enquanto o dedo rola a página (“Só caneta” liga sozinho ao detectar a caneta).
+- **Barra de progresso:** controle deslizante de páginas na base da tela, com percentual e estimativa de tempo restante calculada pelo seu ritmo de leitura.
+- **Desfazer:** Ctrl+Z, botão na barra da caneta ou menu “⋯” desfaz a última anotação criada, excluída ou alterada.
 
 ## Atalhos de teclado
 

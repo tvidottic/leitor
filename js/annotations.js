@@ -16,7 +16,23 @@ export class AnnotationManager extends EventTarget {
     this.bookId = null;
     this.items = [];
     this.dirty = false;
+    this.undoStack = [];
     viewer.addEventListener('pagerendered', (e) => this.renderPage(e.detail.page));
+  }
+
+  pushUndo(entry) { if (this._undoing) return; this.undoStack.push(entry); if (this.undoStack.length > 50) this.undoStack.shift(); }
+  get canUndo() { return this.undoStack.length > 0; }
+  /** Desfaz a última ação (criar, excluir ou alterar anotação). Retorna a descrição ou null. */
+  async undo() {
+    const e = this.undoStack.pop();
+    if (!e) return null;
+    this._undoing = true;
+    try {
+      if (e.type === 'add') { for (const id of e.ids) await this.remove(id); return 'Anotação desfeita.'; }
+      if (e.type === 'remove') { await this.addMany(e.items); return 'Anotação restaurada.'; }
+      if (e.type === 'update') { const a = this.get(e.id); if (a) await this.update(e.id, e.before); return 'Alteração desfeita.'; }
+    } finally { this._undoing = false; }
+    return null;
   }
 
   async load(bookId) {
@@ -194,6 +210,7 @@ export class AnnotationManager extends EventTarget {
   async addMany(list) {
     this.items.push(...list);
     this.sort();
+    this.pushUndo({ type: 'add', ids: list.map(a => a.id) });
     await db.putMany('annotations', list);
     for (const p of new Set(list.map(a => a.page))) this.renderPage(p);
     this.emit();
@@ -203,6 +220,8 @@ export class AnnotationManager extends EventTarget {
   async update(id, patch) {
     const ann = this.get(id);
     if (!ann) return;
+    const before = {}; for (const k of Object.keys(patch)) before[k] = ann[k];
+    this.pushUndo({ type: 'update', id, before });
     Object.assign(ann, patch, { updatedAt: Date.now() });
     if (ann.hasAppearance) this.needsReload = true; // o canvas ainda mostra a aparência antiga
     await db.put('annotations', ann);
@@ -217,6 +236,7 @@ export class AnnotationManager extends EventTarget {
     const ids = ann.groupId ? this.items.filter(a => a.groupId === ann.groupId).map(a => a.id) : [id];
     const pages = new Set(this.items.filter(a => ids.includes(a.id)).map(a => a.page));
     if (this.items.some(a => ids.includes(a.id) && a.hasAppearance)) this.needsReload = true;
+    this.pushUndo({ type: 'remove', items: this.items.filter(a => ids.includes(a.id)) });
     this.items = this.items.filter(a => !ids.includes(a.id));
     await db.delMany('annotations', ids);
     for (const p of pages) this.renderPage(p);
