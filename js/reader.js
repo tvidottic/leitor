@@ -11,7 +11,7 @@ import { translate } from './translate.js';
 import { saveVocab, listVocab, removeVocab, updateVocab, vocabToCsv } from './vocab.js';
 import { settings, saveSettings } from './db.js';
 import { hasFSA } from './library.js';
-import { $, $$, el, icon, debounce, rafThrottle, toast, copyText, speak, normalizeText, isSingleWord, downloadText, clamp, isCoarsePointer, escapeHtml, langToBcp47 } from './utils.js';
+import { $, $$, el, icon, debounce, rafThrottle, toast, copyText, speak, normalizeText, isSingleWord, downloadText, clamp, isCoarsePointer, onFirstTouch, escapeHtml, langToBcp47 } from './utils.js';
 
 export class Reader {
   constructor(app) {
@@ -745,7 +745,10 @@ export class Reader {
     const touchDone = () => { this.touching = false; if (this.pendingSel) { this.pendingSel = false; onSelChange(); } };
     this.container.addEventListener('touchend', touchDone, { passive: true });
     this.container.addEventListener('touchcancel', touchDone, { passive: true });
-    if (coarse) { this.selToolbar.classList.add('bottom'); this.wordPopup.classList.add('bottom'); }
+    const touchUi = () => { this.selToolbar.classList.add('bottom'); this.wordPopup.classList.add('bottom'); };
+    if (coarse) touchUi();
+    // tela de toque não anunciada pela consulta de mídia (tablet em "modo computador"): ajusta no primeiro toque
+    onFirstTouch(() => { if (!coarse) { touchUi(); this.applySelectionMode(); } });
     this.container.addEventListener('pointerdown', e => {
       const tl = e.target.closest?.('.textLayer');
       if (tl) tl.classList.add('selecting');

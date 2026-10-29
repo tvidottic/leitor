@@ -54,7 +54,17 @@ export function escapeHtml(s) {
 
 export function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 
-export const isCoarsePointer = () => matchMedia('(pointer: coarse)').matches;
+// Tela de toque: pela consulta de mídia ou, na dúvida (tablets em "modo computador", conversíveis),
+// a partir do primeiro toque recebido.
+let touchSeen = false;
+const firstTouchFns = [];
+window.addEventListener('touchstart', () => {
+  touchSeen = true;
+  for (const fn of firstTouchFns.splice(0)) { try { fn(); } catch (err) { console.error(err); } }
+}, { passive: true, capture: true, once: true });
+export const isCoarsePointer = () => touchSeen || matchMedia('(pointer: coarse)').matches;
+/** Chama fn no primeiro toque na tela (ou já, se um toque já aconteceu). */
+export const onFirstTouch = (fn) => { if (touchSeen) fn(); else firstTouchFns.push(fn); };
 
 export function formatBytes(n) {
   if (!n) return '0 B';

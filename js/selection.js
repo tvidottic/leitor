@@ -1,11 +1,17 @@
 // Seleção de texto própria do aplicativo: não usa a seleção nativa do navegador, por isso não aparecem
-// os menus de copiar/pesquisar do próprio navegador. Toque longo (ou arraste com o mouse) seleciona
+// os menus de copiar/pesquisar do próprio navegador. Toque longo (ou arraste com o mouse/caneta) seleciona
 // palavras inteiras; alças nas pontas permitem ajustar.
+//
+// No toque e na caneta o gesto é acompanhado pelos eventos de toque (touchstart/touchmove/touchend), e não
+// pelos eventos de ponteiro: o Chrome para Android cancela os eventos de ponteiro (pointercancel) ao
+// reconhecer o toque longo ou ao começar a rolar, o que interrompia a seleção em tablets. Os eventos de
+// toque continuam chegando e, com preventDefault em touchmove, a página não rola enquanto se seleciona.
 
 import { el } from './utils.js';
 
 const WORD = /[\p{L}\p{M}\d'’-]/u;
 const LONG_PRESS_MS = 420;
+const MOVE_SLOP = 8;
 
 export class CustomSelection extends EventTarget {
   constructor(container) {
@@ -14,9 +20,10 @@ export class CustomSelection extends EventTarget {
     this.enabled = false;
     this.range = null;
     this.anchor = null;      // {node, offset} ponto fixo
-    this.dragging = null;    // 'new' | 'start' | 'end'
-    this.pending = null;
-    this.timer = null;
+    this.snap = true;
+    // gesto em andamento: { via: 'pointer'|'touch', kind: 'mouse'|'pen'|'touch', id, x, y, caret, phase: 'pending'|'drag', timer }
+    this.gesture = null;
+    this.lastPointer = null; // último pointerdown (para saber se um touchstart veio de uma caneta)
     this.overlay = el('div', { class: 'sel-overlay', hidden: true });
     document.body.append(this.overlay);
     this._bind();
@@ -27,6 +34,8 @@ export class CustomSelection extends EventTarget {
     this.container.classList.toggle('custom-sel', this.enabled);
     if (!this.enabled) this.clear();
   }
+
+  get dragging() { return this.gesture?.phase === 'drag'; }
 
   /** Objeto compatível com window.getSelection() para o restante do app. */
   shim() {
@@ -43,7 +52,8 @@ export class CustomSelection extends EventTarget {
 
   clear() {
     const had = !!this.range;
-    this.range = null; this.anchor = null; this.dragging = null;
+    this.range = null; this.anchor = null;
+    this.endGesture();
     this.overlay.hidden = true; this.overlay.replaceChildren();
     if (had) this.dispatchEvent(new Event('clear'));
   }
@@ -140,77 +150,149 @@ export class CustomSelection extends EventTarget {
   // ------------------------------------------------------------ eventos
   _bind() {
     const c = this.container;
-    c.addEventListener('pointerdown', (e) => this.onDown(e));
-    c.addEventListener('pointermove', (e) => this.onMove(e));
-    c.addEventListener('pointerup', (e) => this.onUp(e));
-    c.addEventListener('pointercancel', (e) => this.onUp(e, true));
-    c.addEventListener('touchmove', (e) => { if (this.dragging) e.preventDefault(); }, { passive: false });
-    c.addEventListener('contextmenu', (e) => { if (this.enabled && e.target.closest?.('.textLayer')) e.preventDefault(); });
+    c.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+    c.addEventListener('pointermove', (e) => this.onPointerMove(e));
+    c.addEventListener('pointerup', (e) => this.onPointerUp(e));
+    c.addEventListener('pointercancel', (e) => this.onPointerUp(e, true));
+    c.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
+    c.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
+    c.addEventListener('touchend', (e) => this.onTouchEnd(e), { passive: false });
+    c.addEventListener('touchcancel', (e) => this.onTouchEnd(e, true), { passive: false });
+    // sem menu de contexto do navegador sobre o texto nem durante um gesto de seleção (no Android, o menu
+    // do toque longo cancelaria o gesto)
+    c.addEventListener('contextmenu', (e) => { if (this.enabled && (this.gesture || this.range || e.target.closest?.('.textLayer'))) e.preventDefault(); });
     c.addEventListener('scroll', () => { if (this.range) requestAnimationFrame(() => this.draw()); }, { passive: true });
     window.addEventListener('resize', () => { if (this.range) this.draw(); });
   }
 
-  onDown(e) {
-    if (!this.enabled || e.button > 0 || this.container.classList.contains('inking')) return;
-    if (e.target.closest?.('.note-pin, .pdf-link')) return;
-    const handle = this.range ? this.nearHandle(e.clientX, e.clientY) : null;
+  canStart(target) {
+    return this.enabled && !this.container.classList.contains('inking') && !target.closest?.('.note-pin, .pdf-link');
+  }
+
+  /** Começo comum de um gesto em (x, y). Devolve true se o gesto foi assumido. */
+  beginAt(x, y, target, kind, via, id) {
+    const handle = this.range ? this.nearHandle(x, y) : null;
     if (handle) {
-      this.dragging = handle;
       this.anchor = handle === 'end' ? { node: this.range.startContainer, offset: this.range.startOffset } : { node: this.range.endContainer, offset: this.range.endOffset };
-      this.capture(e);
-      e.preventDefault();
+      this.gesture = { via, kind, id, x, y, caret: null, phase: 'drag', handle };
       this.dispatchEvent(new Event('start'));
-      return;
+      return true;
     }
-    const inText = !!e.target.closest?.('.textLayer');
-    if (this.range && !inText) { this.clear(); return; }
-    if (!inText) return;
-    const caret = this.caretAt(e.clientX, e.clientY);
+    const inText = !!target.closest?.('.textLayer');
+    if (this.range && !inText) { this.clear(); return false; }
+    if (!inText) return false;
+    const caret = this.caretAt(x, y);
     if (this.range) this.clear();
-    if (!caret) return;
-    this.pending = { x: e.clientX, y: e.clientY, caret, id: e.pointerId, type: e.pointerType };
-    clearTimeout(this.timer);
-    if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') {
-      this.timer = setTimeout(() => {
-        if (!this.pending) return;
-        const p = this.pending; this.pending = null;
+    if (!caret) return false;
+    this.gesture = { via, kind, id, x, y, caret, phase: 'pending', timer: null };
+    if (kind === 'touch') {
+      this.gesture.timer = setTimeout(() => {
+        const g = this.gesture;
+        if (!g || g.phase !== 'pending') return;
         try { navigator.vibrate?.(12); } catch { /* ignore */ }
-        this.start(p.caret, true);
-        this.capture({ pointerId: p.id });
+        this.start(g.caret, true);
       }, LONG_PRESS_MS);
     }
+    return true;
   }
-  onMove(e) {
-    if (this.dragging) {
-      const caret = this.caretAt(e.clientX, e.clientY);
+  moveTo(x, y) {
+    const g = this.gesture;
+    if (!g) return;
+    if (g.phase === 'drag') {
+      const caret = this.caretAt(x, y);
       if (caret) { this.range = this.buildRange(this.anchor, caret, this.snap); this.draw(); }
-      e.preventDefault?.();
       return;
     }
-    if (!this.pending) return;
-    const dx = e.clientX - this.pending.x, dy = e.clientY - this.pending.y;
-    if (Math.hypot(dx, dy) > 8) {
-      if (this.pending.type === 'mouse' || this.pending.type === 'pen') { const p = this.pending; this.pending = null; this.start(p.caret, p.type === 'pen'); this.capture(e); }
-      else { this.pending = null; clearTimeout(this.timer); } // dedo moveu: é rolagem
+    if (Math.hypot(x - g.x, y - g.y) > MOVE_SLOP) {
+      if (g.kind === 'touch') { this.endGesture(); return; } // dedo moveu antes do toque longo: é rolagem
+      this.start(g.caret, g.kind === 'pen');                  // mouse/caneta: arrastar seleciona de imediato
     }
   }
-  onUp(e, cancel = false) {
-    clearTimeout(this.timer);
-    this.pending = null;
-    if (!this.dragging) return;
-    this.dragging = null;
-    try { this.container.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  finish(cancel = false) {
+    const g = this.gesture;
+    if (!g) return;
+    const wasDrag = g.phase === 'drag';
+    this.endGesture();
+    if (!wasDrag) return;
     if (cancel || !this.range || this.range.collapsed) { this.clear(); return; }
     this.draw();
     this.dispatchEvent(new Event('end'));
   }
+  endGesture() {
+    const g = this.gesture;
+    if (!g) return;
+    clearTimeout(g.timer);
+    if (g.via === 'pointer') { try { this.container.releasePointerCapture(g.id); } catch { /* ignore */ } }
+    this.gesture = null;
+  }
   start(caret, snap) {
+    const g = this.gesture;
     this.snap = snap;
     this.anchor = caret;
-    this.dragging = 'new';
+    if (g) g.phase = 'drag';
     this.range = snap ? this.buildRange(caret, caret, true) : null;
     this.draw();
     this.dispatchEvent(new Event('start'));
   }
-  capture(e) { try { this.container.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
+
+  // ---- mouse e caneta (eventos de ponteiro)
+  onPointerDown(e) {
+    this.lastPointer = { type: e.pointerType, t: performance.now() };
+    if (e.pointerType === 'touch') return;                      // o toque é tratado pelos eventos de toque
+    if (!this.canStart(e.target) || e.button > 0 || this.gesture) return;
+    const kind = e.pointerType === 'pen' ? 'pen' : 'mouse';
+    if (this.beginAt(e.clientX, e.clientY, e.target, kind, 'pointer', e.pointerId)) {
+      if (this.gesture.phase === 'drag') { e.preventDefault(); this.capture(e.pointerId); }
+    }
+  }
+  onPointerMove(e) {
+    const g = this.gesture;
+    if (!g || g.via !== 'pointer' || e.pointerId !== g.id) return;
+    const wasPending = g.phase === 'pending';
+    this.moveTo(e.clientX, e.clientY);
+    if (this.gesture?.phase === 'drag') { e.preventDefault(); if (wasPending) this.capture(e.pointerId); }
+  }
+  onPointerUp(e, cancel = false) {
+    const g = this.gesture;
+    if (!g || g.via !== 'pointer' || e.pointerId !== g.id) return;
+    this.finish(cancel);
+  }
+  capture(id) { try { this.container.setPointerCapture(id); } catch { /* ignore */ } }
+
+  // ---- dedo e caneta em telas de toque (eventos de toque)
+  onTouchStart(e) {
+    if (e.touches.length !== 1) { if (this.gesture?.via === 'touch') this.finish(this.gesture.phase !== 'drag'); return; }
+    const t = e.touches[0];
+    // uma caneta gera pointerdown (pen) e logo depois touchstart: o gesto já começado passa a ser seguido pelo toque
+    const g = this.gesture;
+    if (g && g.via === 'pointer' && g.kind === 'pen') {
+      try { this.container.releasePointerCapture(g.id); } catch { /* ignore */ }
+      g.via = 'touch'; g.id = t.identifier;
+      if (g.phase === 'drag') e.preventDefault();
+      return;
+    }
+    if (g || !this.canStart(e.target)) return;
+    const pen = this.lastPointer && this.lastPointer.type === 'pen' && performance.now() - this.lastPointer.t < 300;
+    if (this.beginAt(t.clientX, t.clientY, e.target, pen ? 'pen' : 'touch', 'touch', t.identifier)) {
+      if (this.gesture.phase === 'drag') e.preventDefault();     // alça: não rola
+    }
+  }
+  touchOf(e) {
+    const g = this.gesture;
+    if (!g || g.via !== 'touch') return null;
+    return Array.from(e.changedTouches).find(t => t.identifier === g.id) || null;
+  }
+  onTouchMove(e) {
+    const t = this.touchOf(e);
+    if (!t) return;
+    this.moveTo(t.clientX, t.clientY);
+    if (this.gesture?.phase === 'drag') e.preventDefault();     // selecionando: a página não rola
+  }
+  onTouchEnd(e, cancel = false) {
+    const t = this.touchOf(e);
+    if (!t) return;
+    const wasDrag = this.gesture.phase === 'drag';
+    this.finish(cancel);
+    if (wasDrag) e.preventDefault();                             // sem clique sintético após selecionar
+  }
 }

@@ -17,6 +17,7 @@ class App {
     await loadSettings();
     this.applyTheme();
     this.reader = new Reader(this);
+    if (new URLSearchParams(location.search).has('diag')) import('./diag.js').then(m => m.startDiag(this.reader)).catch(err => console.error(err));
     this._bindSettings();
     $('#btn-settings-lib').addEventListener('click', () => this.openSettings());
     await this.library.refresh();

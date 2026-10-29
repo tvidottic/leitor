@@ -555,7 +555,13 @@ polyline.ink.flash { animation: inkflash 1.2s ease-out; }
 @media (pointer: coarse) { .scrubber input[type=range]::-webkit-slider-thumb { width: 20px; height: 20px; margin-top: -8px; } }
 
 /* caneta detectada: o dedo rola, a caneta escreve */
-.pen-only .inkLayer { touch-action: pan-x pan-y; cursor: default; }
+.pen-only .inkLayer { cursor: default; }
+/* diagnóstico (?diag) */
+.diag { position: fixed; right: 8px; top: 56px; width: min(420px, calc(100vw - 16px)); max-height: 45vh; display: flex; flex-direction: column; background: rgba(20,22,30,.94); color: #e6e8ef; border-radius: 10px; z-index: 300; font-size: 11px; box-shadow: var(--shadow-lg); }
+.diag-bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.12); }
+.diag-bar strong { flex: 1; font-size: 12px; }
+.diag-bar .btn { color: #e6e8ef; min-height: 28px; }
+.diag-log { margin: 0; padding: 8px; overflow: auto; font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; -webkit-user-select: text; user-select: text; }
 
 /* refinamento visual */
 :root { --bg-viewer: #dfe2e8; }

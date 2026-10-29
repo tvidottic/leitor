@@ -1,9 +1,9 @@
 // Service worker: deixa o aplicativo disponível offline (os livros ficam no IndexedDB).
-const VERSION = 'leitor-v6';
+const VERSION = 'leitor-v7';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/reader.js', './js/viewer.js', './js/library.js', './js/annotations.js', './js/translate.js',
-  './js/panel.js', './js/vocab.js', './js/db.js', './js/utils.js', './js/cloud.js', './js/pdfsync.js', './js/ink.js', './js/selection.js', './js/pdf-writer.worker.js',
+  './js/panel.js', './js/vocab.js', './js/db.js', './js/utils.js', './js/cloud.js', './js/pdfsync.js', './js/ink.js', './js/selection.js', './js/diag.js', './js/pdf-writer.worker.js',
   './js/vendor/pdf.min.mjs', './js/vendor/pdf.worker.min.mjs', './js/vendor/pdf-lib.esm.min.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
 ];

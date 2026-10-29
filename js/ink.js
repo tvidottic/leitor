@@ -1,4 +1,8 @@
 // Ferramenta de caneta: desenho à mão livre sobre a página, gravado como anotação /Ink no PDF.
+//
+// A camada de tinta tem touch-action: none, então o navegador nunca rola nem cancela o traço
+// (no Chrome para Android, qualquer rolagem iniciada pelo navegador dispara pointercancel). No modo
+// "só caneta", o dedo rola a página por conta própria (com inércia) e só a caneta desenha.
 
 import { el } from './utils.js';
 import { INK_COLORS } from './annotations.js';
@@ -17,12 +21,15 @@ export class InkTool extends EventTarget {
     this.eraser = false;
     this.penOnlyMode = 'auto';   // 'auto' (só caneta quando uma caneta foi detectada) | 'on' | 'off'
     this.penSeen = false;
-    this.activePen = false;
     this.stroke = null;
+    this.pan = null;
+    this.panRaf = 0;
     viewer.addEventListener('pagerendered', (e) => { if (this.active) this.attach(this.viewer.getPage(e.detail.page)); });
     viewer.container.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'pen' && !this.penSeen) { this.penSeen = true; this.applyTouchAction(); this.dispatchEvent?.(new Event('penseen')); }
     }, true);
+    // no Android, o toque longo abriria o menu de contexto e cancelaria o traço
+    viewer.container.addEventListener('contextmenu', (e) => { if (this.active) e.preventDefault(); });
   }
 
   get penOnly() { return this.penOnlyMode === 'on' || (this.penOnlyMode === 'auto' && this.penSeen); }
@@ -33,6 +40,7 @@ export class InkTool extends EventTarget {
     this.active = !!on;
     this.viewer.inkActive = this.active;
     this.viewer.container.classList.toggle('inking', this.active);
+    this.stroke = null; this.pan = null; cancelAnimationFrame(this.panRaf);
     for (const p of this.viewer.pages) {
       if (this.active && (p.rendered || p.rendering)) this.attach(p);
       else { p.inkLayer.hidden = true; p.inkLayer.replaceChildren(); }
@@ -48,22 +56,21 @@ export class InkTool extends EventTarget {
     svg.setAttribute('class', 'ink-live');
     p.inkLayer.append(svg);
     p.inkLayer.addEventListener('pointerdown', (e) => this.onDown(e, p, svg));
-    // com "só caneta": o dedo rola a página; a caneta (stylus) escreve sem rolar
-    p.inkLayer.addEventListener('touchstart', (e) => {
-      const stylus = this.activePen || Array.from(e.touches).some(t => t.touchType === 'stylus');
-      if (!this.penOnly || stylus) e.preventDefault();
-    }, { passive: false });
-    p.inkLayer.addEventListener('touchmove', (e) => { if (this.stroke) e.preventDefault(); }, { passive: false });
     p.inkLayer.addEventListener('pointermove', (e) => this.onMove(e, p));
     p.inkLayer.addEventListener('pointerup', (e) => this.onUp(e, p));
     p.inkLayer.addEventListener('pointercancel', (e) => this.onUp(e, p, true));
+    // os eventos de toque não têm função aqui: evitam apenas seleção, menus e cliques sintéticos
+    const stop = (e) => { if (e.cancelable) e.preventDefault(); };
+    p.inkLayer.addEventListener('touchstart', stop, { passive: false });
+    p.inkLayer.addEventListener('touchmove', stop, { passive: false });
+    p.inkLayer.addEventListener('touchend', stop, { passive: false });
   }
 
   onDown(e, p, svg) {
     if (!this.active || e.button > 0) return;
-    this.activePen = e.pointerType === 'pen';
-    if (this.penOnly && e.pointerType === 'touch') return;
     e.preventDefault();
+    if (this.penOnly && e.pointerType === 'touch') { this.startPan(e, p); return; }
+    if (this.stroke) return;
     if (this.eraser) { this.eraseAt(e, p); return; }
     try { p.inkLayer.setPointerCapture(e.pointerId); } catch { /* alguns navegadores/eventos sintéticos */ }
     const r = p.div.getBoundingClientRect();
@@ -75,8 +82,10 @@ export class InkTool extends EventTarget {
     this.updatePolyline();
   }
   onMove(e, p) {
+    if (this.pan && e.pointerId === this.pan.id) { this.movePan(e); return; }
     if (!this.stroke || e.pointerId !== this.stroke.pointerId) {
-      if (this.eraser && this.active && e.buttons) this.eraseAt(e, p);
+      if (this.eraser && this.active && e.buttons && e.pointerType !== 'touch') this.eraseAt(e, p);
+      else if (this.eraser && this.active && e.buttons && !this.penOnly) this.eraseAt(e, p);
       return;
     }
     e.preventDefault();
@@ -93,6 +102,7 @@ export class InkTool extends EventTarget {
     this.stroke.pl.setAttribute('points', this.stroke.pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' '));
   }
   async onUp(e, p, cancel = false) {
+    if (this.pan && e.pointerId === this.pan.id) { this.endPan(p); return; }
     const s = this.stroke;
     if (!s || e.pointerId !== s.pointerId) return;
     this.stroke = null;
@@ -109,6 +119,35 @@ export class InkTool extends EventTarget {
     const { x, y } = this.viewer.clientToPdf(p.num, e.clientX, e.clientY);
     const hit = this.ann.byPage(p.num).find(a => a.type === 'ink' && a.paths.some(path => { for (let i = 0; i < path.length; i += 2) if (Math.hypot(path[i] - x, path[i + 1] - y) < (a.width || 2) + 6 / this.viewer.scale) return true; return false; }));
     if (hit) this.ann.remove(hit.id);
+  }
+
+  // ---- rolagem com o dedo no modo "só caneta"
+  startPan(e, p) {
+    cancelAnimationFrame(this.panRaf);
+    this.pan = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), vx: 0, vy: 0 };
+    try { p.inkLayer.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  }
+  movePan(e) {
+    const c = this.viewer.container, pan = this.pan;
+    const now = performance.now(), dt = Math.max(1, now - pan.t);
+    const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+    c.scrollLeft -= dx; c.scrollTop -= dy;
+    pan.vx = 0.7 * pan.vx + 0.3 * (dx / dt); pan.vy = 0.7 * pan.vy + 0.3 * (dy / dt);
+    pan.x = e.clientX; pan.y = e.clientY; pan.t = now;
+  }
+  endPan(p) {
+    const c = this.viewer.container, pan = this.pan;
+    this.pan = null;
+    try { p.inkLayer.releasePointerCapture(pan.id); } catch { /* ignore */ }
+    if (performance.now() - pan.t > 80) return;
+    let vx = pan.vx, vy = pan.vy, last = performance.now();
+    const step = (now) => {
+      const dt = now - last; last = now;
+      c.scrollLeft -= vx * dt; c.scrollTop -= vy * dt;
+      vx *= Math.pow(0.95, dt / 16); vy *= Math.pow(0.95, dt / 16);
+      if (Math.hypot(vx, vy) > 0.02) this.panRaf = requestAnimationFrame(step);
+    };
+    this.panRaf = requestAnimationFrame(step);
   }
 }
 

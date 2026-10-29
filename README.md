@@ -129,6 +129,8 @@ Configurações → Nuvem. O login usa OAuth PKCE, sem segredo do app.
 - **Caneta (Apple Pencil, S Pen e similares):** seleciona texto arrastando, sem toque longo, e, na ferramenta de caneta, escreve enquanto o dedo rola a página (“Só caneta” liga sozinho ao detectar a caneta).
 - **Barra de progresso:** controle deslizante de páginas na base da tela, com percentual e estimativa de tempo restante calculada pelo seu ritmo de leitura.
 - **Desfazer:** Ctrl+Z, botão na barra da caneta ou menu “⋯” desfaz a última anotação criada, excluída ou alterada.
+- **Android:** a seleção por toque longo e a caneta acompanham os eventos de toque, que o Chrome não cancela ao reconhecer o toque longo (os eventos de ponteiro são cancelados, o que travava a seleção em tablets). No modo “Só caneta”, o dedo rola a página com inércia própria.
+- **Diagnóstico:** abrir o app com `?diag` no endereço (ex.: `https://tvidottic.github.io/leitor/?diag`) mostra um painel com o ambiente do aparelho e os eventos recebidos, com botão para copiar; útil para relatar um problema num aparelho específico.
 
 ## Atalhos de teclado
 
